@@ -132,7 +132,7 @@ implements ApplicationContextAware, CompetitionControl
     if (setup() == false)
       return
 
-    start((long) (competition.timeslotLength * TimeService.MINUTE /
+    runSimulation((long) (competition.timeslotLength * TimeService.MINUTE /
 		  competition.simulationRate))
   }
 
@@ -158,7 +158,7 @@ implements ApplicationContextAware, CompetitionControl
   /**
    * Starts the simulation.  
    */
-  void start (long scheduleMillis)
+  void runSimulation (long scheduleMillis)
   {
     logService.start()
     runAsync {
@@ -190,17 +190,20 @@ implements ApplicationContextAware, CompetitionControl
         int slot = 0
         clock.scheduleTick()
         while (running) {
-          log.info("Wait for tick $slot")
-          clock.waitForTick(slot++)
-          step()
-          clock.complete()
-          def hibSession = sessionFactory.getCurrentSession()
-          if (hibSession == null) {
-            log.error "null hibernate session"
+          def future = callAsync {
+            log.info("Wait for tick $slot")
+            clock.waitForTick(slot++)
+            step()
+            clock.complete()
+            //def hibSession = sessionFactory.getCurrentSession()
+            //if (hibSession == null) {
+            //  log.error "null hibernate session"
+            //}
+            //else {
+            //  hibSession.flush()
+            //}
           }
-          else {
-            hibSession.flush()
-          }
+          def result = future.get()
         }
       }
 
