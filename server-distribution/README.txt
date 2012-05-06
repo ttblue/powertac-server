@@ -1,6 +1,6 @@
-April 2012
+6 May 2012
 
-Welcome to the 0.5.0 release of the Power TAC server. This release
+Welcome to the 0.5.1 release of the Power TAC server. This release
 contains the server and an initial version of the game visualizer,
 including a simple control panel that allows you to set up and run
 bootstrap and competition sessions. There is a compatible sample
