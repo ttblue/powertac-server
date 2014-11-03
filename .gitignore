@@ -3,13 +3,6 @@
 .project
 .gitmodules
 rw.gitmodules
-accounting
-auctioneer
-default-broker
-distribution-utility
-genco
-household-customer
-server-interface
 
 # IntelliJ IDEA project files
 *.iml
