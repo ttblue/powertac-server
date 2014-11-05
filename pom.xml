@@ -47,6 +47,7 @@
     <module>webapp-dependencies</module>
     <module>visualizer</module>
     <module>sample-broker</module>
+    <module>expert-broker</module>
   </modules>
 
   <!-- Sonatype OSS repo for resolving snapshot modules -->
