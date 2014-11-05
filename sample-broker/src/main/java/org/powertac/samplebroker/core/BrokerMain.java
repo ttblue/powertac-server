@@ -15,6 +15,9 @@
  */
 package org.powertac.samplebroker.core;
 
+//
+import java.lang.Thread;
+
 //import org.apache.log4j.Logger;
 import org.springframework.context.support.AbstractApplicationContext;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
@@ -26,17 +29,23 @@ import org.springframework.context.support.ClassPathXmlApplicationContext;
 public class BrokerMain
 {
   //static private Logger log = Logger.getLogger(BrokerMain.class);
-
+    
   /**
    * Sets up the broker. Single command-line arg is the username
    */
   public static void main (String[] args)
+      throws java.lang.InterruptedException
   {
       // replaced BrokerRunner with MultipleBrokerRunner
       MultipleBrokerRunner mbr = new MultipleBrokerRunner();
       mbr.processCmdLine(args);
+
+      // sleep till the shutdown hook is enabled
+      while(true) {
+          Thread.sleep(1000);
+          }
       
     // if we get here, it's time to exit
-    System.exit(0);
+    //System.exit(0);
   }
 }
