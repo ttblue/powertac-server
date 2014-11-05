@@ -46,7 +46,7 @@ public class MultipleBrokerRunner
     private AbstractApplicationContext context;
  
     // the container that holds instances of multiple brokers
-    private Vector<PowerTacBroker> brokerList;
+    private Vector<PowerTacThreadedBroker> brokerList;
 
     // the environment variable that points to the config directory
     private String brokerConfigDir="BROKER_CONFIG_DIR";
@@ -84,7 +84,7 @@ public class MultipleBrokerRunner
         configFiles = dir.listFiles(filter);
 
         // instantiate brokerList
-        brokerList = new Vector<PowerTacBroker>();
+        brokerList = new Vector<PowerTacThreadedBroker>();
     }
   
     public void processCmdLine (String[] args)
@@ -181,8 +181,11 @@ public class MultipleBrokerRunner
                 for(int idx = 0; idx < configFiles.length; ++idx) {
                     PowerTacBroker broker = (PowerTacBroker)context.getBeansOfType(PowerTacBroker.class).values().toArray()[0];
                     System.out.println("Starting session " + counter + " for broker " + idx);
-                    broker.startSession(configFiles[idx], jmsUrl, noNtp, queueName, serverQueue, end);
-                    brokerList.addElement(broker);
+
+                    PowerTacThreadedBroker threadedBroker =
+                        new PowerTacThreadedBroker(broker, configFiles[idx], jmsUrl, noNtp, queueName, serverQueue, end);
+                    threadedBroker.start();
+                    brokerList.addElement(threadedBroker);
                 }
         
                 if (null != repeatCount)
