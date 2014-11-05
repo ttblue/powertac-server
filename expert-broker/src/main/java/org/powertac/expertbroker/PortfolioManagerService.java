@@ -438,125 +438,76 @@ implements PortfolioManager, Initializable, Activatable
 		}
 	}
 
-	private void weightedMajority()
-	{
-		HashMap<Broker, Double> brokerProfits = contextManager.getAllLastProfits();
-
-		// Find the max and min
-		Map.Entry<Broker, Double> minEntry = null;
-		Map.Entry<Broker, Double> maxEntry = null;
-		for (Map.Entry<Broker, Double> entry : brokerProfits.entrySet()) {
-			if (maxEntry == null || entry.getValue() > maxEntry.getValue()) {
-				maxEntry = entry;
-			}
-			if (minEntry == null || entry.getValue() < minEntry.getValue()) {
-				minEntry = entry;
-			}
-		}
-
-		// Update the weights
-		double learningRate = 1;
-		double totalWeight = 0;
-		Map.Entry<Broker, Double> bestExpert = null;
-		for (Map.Entry<Broker, Double> entry : brokerProfits.entrySet()) {
-			// Calculate the loss of this broker
-			double loss = (maxEntry.getValue() - entry.getValue())/(maxEntry.getValue() - minEntry.getValue());
-			// Update the broker's weight
-			brokerWeights.put(entry.getKey(), entry.getValue() - learningRate*loss);
-
-			// Remember the largest weight (best expert) for use in follow-the-leader weighted majority
-			if (bestExpert == null || brokerWeights.get(entry.getKey()) > bestExpert.getValue()) {
-				bestExpert = entry;
-			}
-
-			// Calculate the total weight for use in randomized weighted majority
-			totalWeight += Math.exp(brokerWeights.get(entry.getKey()));
-		}
-
-		// Find the max weight and go with that expert
-		Broker bestBroker = null;
-		for (Map.Entry<Broker, Double> entry : brokerProfits.entrySet()) {
-			if (bestBroker == null || entry.getValue() > brokerProfits.get(bestBroker)) {
-				bestBroker = entry.getKey();
-			}
-		}
-		return;
-	}
-
 
 	// Checks to see whether our tariffs need fine-tuning
 	private void improveTariffs()
 	{
-//		// quick magic-number hack to inject a balancing order
-//		int timeslotIndex = timeslotRepo.currentTimeslot().getSerialNumber();
-//		if (371 == timeslotIndex) {
-//			for (TariffSpecification spec :
-//				tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker())) {
-//				if (PowerType.INTERRUPTIBLE_CONSUMPTION == spec.getPowerType()) {
-//					BalancingOrder order = new BalancingOrder(brokerContext.getBroker(),
-//							spec, 
-//							0.5,
-//							spec.getRates().get(0).getMinValue() * 0.9);
-//					brokerContext.sendMessage(order);
-//				}
-//				else if (spec.hasRegulationRate()) {
-//					// supports both up-regulation and down-regulation
-//					RegulationRate rr = spec.getRegulationRates().get(0);
-//					double up = -rr.getUpRegulationPayment();
-//					double down = -rr.getDownRegulationPayment();
-//					BalancingOrder bup = new BalancingOrder(brokerContext.getBroker(),
-//							spec, 1.0, up * 0.5);
-//					BalancingOrder bdown = new BalancingOrder(brokerContext.getBroker(),
-//							spec, -1.0, down * 0.9);
-//					brokerContext.sendMessage(bup);
-//					brokerContext.sendMessage(bdown);
-//				}
-//			}
-//		}
-//		// magic-number hack to supersede a tariff
-//		if (380 == timeslotIndex) {
-//			// find the existing CONSUMPTION tariff
-//			TariffSpecification oldc = null;
-//			List<TariffSpecification> candidates =
-//					tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker());
-//			if (null == candidates || 0 == candidates.size())
-//				log.error("No tariffs found for broker");
-//			else {
-//				// oldc = candidates.get(0);
-//				for (TariffSpecification candidate: candidates) {
-//					if (candidate.getPowerType() == PowerType.CONSUMPTION) {
-//						oldc = candidate;
-//						break;
-//					}
-//				}
-//				if (null == oldc) {
-//					log.warn("No CONSUMPTION tariffs found");
-//				}
-//				else {
-//					double rateValue = oldc.getRates().get(0).getValue();
-//					// create a new CONSUMPTION tariff
-//					TariffSpecification spec =
-//							new TariffSpecification(brokerContext.getBroker(),
-//									PowerType.CONSUMPTION)
-//					.withPeriodicPayment(defaultPeriodicPayment * 1.1);
-//					Rate rate = new Rate().withValue(rateValue);
-//					spec.addRate(rate);
-//					if (null != oldc)
-//						spec.addSupersedes(oldc.getId());
-//					//mungId(spec, 6);
-//					tariffRepo.addSpecification(spec);
-//					brokerContext.sendMessage(spec);
-//					// revoke the old one
-//					TariffRevoke revoke =
-//							new TariffRevoke(brokerContext.getBroker(), oldc);
-//					brokerContext.sendMessage(revoke);
-//				}
-//			}
-//		}
-
-		// Do weighted majority
-		weightedMajority();
-
+		// quick magic-number hack to inject a balancing order
+		int timeslotIndex = timeslotRepo.currentTimeslot().getSerialNumber();
+		if (371 == timeslotIndex) {
+			for (TariffSpecification spec :
+				tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker())) {
+				if (PowerType.INTERRUPTIBLE_CONSUMPTION == spec.getPowerType()) {
+					BalancingOrder order = new BalancingOrder(brokerContext.getBroker(),
+							spec, 
+							0.5,
+							spec.getRates().get(0).getMinValue() * 0.9);
+					brokerContext.sendMessage(order);
+				}
+				else if (spec.hasRegulationRate()) {
+					// supports both up-regulation and down-regulation
+					RegulationRate rr = spec.getRegulationRates().get(0);
+					double up = -rr.getUpRegulationPayment();
+					double down = -rr.getDownRegulationPayment();
+					BalancingOrder bup = new BalancingOrder(brokerContext.getBroker(),
+							spec, 1.0, up * 0.5);
+					BalancingOrder bdown = new BalancingOrder(brokerContext.getBroker(),
+							spec, -1.0, down * 0.9);
+					brokerContext.sendMessage(bup);
+					brokerContext.sendMessage(bdown);
+				}
+			}
+		}
+		// magic-number hack to supersede a tariff
+		if (380 == timeslotIndex) {
+			// find the existing CONSUMPTION tariff
+			TariffSpecification oldc = null;
+			List<TariffSpecification> candidates =
+					tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker());
+			if (null == candidates || 0 == candidates.size())
+				log.error("No tariffs found for broker");
+			else {
+				// oldc = candidates.get(0);
+				for (TariffSpecification candidate: candidates) {
+					if (candidate.getPowerType() == PowerType.CONSUMPTION) {
+						oldc = candidate;
+						break;
+					}
+				}
+				if (null == oldc) {
+					log.warn("No CONSUMPTION tariffs found");
+				}
+				else {
+					double rateValue = oldc.getRates().get(0).getValue();
+					// create a new CONSUMPTION tariff
+					TariffSpecification spec =
+							new TariffSpecification(brokerContext.getBroker(),
+									PowerType.CONSUMPTION)
+					.withPeriodicPayment(defaultPeriodicPayment * 1.1);
+					Rate rate = new Rate().withValue(rateValue);
+					spec.addRate(rate);
+					if (null != oldc)
+						spec.addSupersedes(oldc.getId());
+					//mungId(spec, 6);
+					tariffRepo.addSpecification(spec);
+					brokerContext.sendMessage(spec);
+					// revoke the old one
+					TariffRevoke revoke =
+							new TariffRevoke(brokerContext.getBroker(), oldc);
+					brokerContext.sendMessage(revoke);
+				}
+			}
+		}
 	}
 
 	// ------------- test-support methods ----------------
