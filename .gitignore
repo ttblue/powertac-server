@@ -21,6 +21,7 @@ logs/
 log/
 .settings/
 server-main/boot-data.xml
+ajcore*.txt
 
 # OS generated files
 .DS_Store?

@@ -15,9 +15,12 @@
  */
 package org.powertac.samplebroker;
 
+import java.util.HashMap;
+
 import org.apache.log4j.Logger;
 import org.apache.log4j.Level;
 import org.joda.time.Instant;
+import org.powertac.common.Broker;
 import org.powertac.common.BankTransaction;
 import org.powertac.common.CashPosition;
 import org.powertac.common.Competition;
@@ -46,77 +49,157 @@ import org.springframework.stereotype.Service;
 public class ContextManagerService
 implements Initializable
 {
-  static private Logger log = Logger.getLogger(ContextManagerService.class);
+	static private Logger log = Logger.getLogger(ContextManagerService.class);
 
-  BrokerContext master;
+	BrokerContext master;
+	
+	// Broker profits for other brokers and self.
+	private HashMap<Broker, Double> brokerCashPositions;
+	private HashMap<Broker, Double> lastBrokerProfits;
+	
+	// current cash balance
+	private double myCashPosition = 0;
+	private double myLastProfit;
 
-  // current cash balance
-  private double cash = 0;
-  
 
-//  @SuppressWarnings("unchecked")
-  @Override
-  public void initialize (BrokerContext broker)
-  {
-	log.setLevel(Level.INFO);
-    master = broker;
-// --- no longer needed ---
-//    for (Class<?> clazz: Arrays.asList(BankTransaction.class,
-//                                       CashPosition.class,
-//                                       DistributionReport.class,
-//                                       Competition.class,
-//                                       java.util.Properties.class)) {
-//      broker.registerMessageHandler(this, clazz);
-//    }    
-  }
+	//  @SuppressWarnings("unchecked")
+	@Override
+	public void initialize (BrokerContext broker)
+	{
+		log.setLevel(Level.INFO);
+		master = broker;
+		// --- no longer needed ---
+		//    for (Class<?> clazz: Arrays.asList(BankTransaction.class,
+		//                                       CashPosition.class,
+		//                                       DistributionReport.class,
+		//                                       Competition.class,
+		//                                       java.util.Properties.class)) {
+		//      broker.registerMessageHandler(this, clazz);
+		//    }    
+	}
 
-  // -------------------- message handlers ---------------------
-  //
-  // Note that these arrive in JMS threads; If they share data with the
-  // agent processing thread, they need to be synchronized.
-  
-  /**
-   * BankTransaction represents an interest payment. Value is positive for 
-   * credit, negative for debit. 
-   */
-  public void handleMessage (BankTransaction btx)
-  {
-    // TODO - handle this
-  }
+	// -------------------- message handlers ---------------------
+	//
+	// Note that these arrive in JMS threads; If they share data with the
+	// agent processing thread, they need to be synchronized.
 
-  /**
-   * CashPosition updates our current bank balance.
-   */
-  public void handleMessage (CashPosition cp)
-  {
-    cash = cp.getBalance();
-    log.info("Cash position: " + cash);
-  }
-  
-  /**
-   * DistributionReport gives total consumption and production for the timeslot,
-   * summed across all brokers.
-   */
-  public void handleMessage (DistributionReport dr)
-  {
-    // TODO - use this data
-  }
-  
-  /**
-   * Handles the Competition instance that arrives at beginning of game.
-   * Here we capture all the customer records so we can keep track of their
-   * subscriptions and usage profiles.
-   */
-  public void handleMessage (Competition comp)
-  {
-    // TODO - process competition properties
-  }
+	/**
+	 * BankTransaction represents an interest payment. Value is positive for 
+	 * credit, negative for debit. 
+	 */
+	public void handleMessage (BankTransaction btx)
+	{
+		// TODO - handle this
+	}
 
-  /**
-   * Receives the server configuration properties.
-   */
-  public void handleMessage (java.util.Properties serverProps)
-  {
-    // TODO - adapt to the server setup.
-  }
+	/**
+	 * CashPosition updates our current bank balance.
+	 */
+	public void handleMessage (CashPosition cp)
+	{	
+		Broker theBroker = cp.getBroker();
+		if (master.getBrokerUsername().equals(theBroker.getUsername())) {
+			if (theBroker != master.getBroker())
+				// strange bug, seems harmless for now
+				log.info("Resolution failed for broker " + theBroker.getUsername());
+			myLastProfit = cp.getBalance() - myCashPosition;
+			myCashPosition = cp.getBalance();
+			log.info("Cash position: " + myCashPosition);
+		}
+		else {
+			
+			if (lastBrokerProfits.get(theBroker) == null)
+				// It seems that for the first time step,
+				// whoever has the most money will have the least loss.
+				lastBrokerProfits.put(theBroker, 0.0);
+			else
+				lastBrokerProfits.put(theBroker, cp.getBalance() - brokerCashPositions.get(theBroker));
+			brokerCashPositions.put(cp.getBroker(), cp.getBalance());
+		}
+	}
+	
+	/**
+	 * @param broker
+	 * @return the cash position of broker.
+	 */
+	public double getCashPosition(Broker broker) {
+
+		if (master.getBrokerUsername().equals(broker.getUsername())) {
+			if (broker != master.getBroker())
+				// strange bug, seems harmless for now
+				log.info("Resolution failed for broker " + broker.getUsername());
+			return myCashPosition;
+		}
+		else {
+			if (brokerCashPositions.get(broker) == null) {
+				//log.error("This broker doesn't exist in my database");
+				log.warn("This broker doesn't exist in my database");
+				return 0.0;
+			}
+			return brokerCashPositions.get(broker);
+		}
+	}
+	
+	/**
+	 * @param broker
+	 * @return the last profit of broker.
+	 */
+	public double getLastProfit(Broker broker) {
+
+		if (master.getBrokerUsername().equals(broker.getUsername())) {
+			if (broker != master.getBroker())
+				// strange bug, seems harmless for now
+				log.info("Resolution failed for broker " + broker.getUsername());
+			return myLastProfit;
+		}
+		else {
+			if (lastBrokerProfits.get(broker) == null) {
+				//log.error("This broker doesn't exist in my database");
+				log.warn("This broker doesn't exist in my database");
+				return 0.0;
+			}
+			return lastBrokerProfits.get(broker);
+		}
+	}
+	
+	/**
+	 * @return the cash positions of all broker.
+	 */
+	public HashMap<Broker, Double> getAllCashPosition() {
+		return brokerCashPositions;
+	}
+	
+	/**
+	 * @return the last profits of all broker.
+	 */
+	public HashMap<Broker, Double> getAllLastProfits() {
+		return lastBrokerProfits;
+	}	
+
+	/**
+	 * DistributionReport gives total consumption and production for the timeslot,
+	 * summed across all brokers.
+	 */
+	public void handleMessage (DistributionReport dr)
+	{
+		// TODO - use this data
+	}
+
+	/**
+	 * Handles the Competition instance that arrives at beginning of game.
+	 * Here we capture all the customer records so we can keep track of their
+	 * subscriptions and usage profiles.
+	 */
+	public void handleMessage (Competition comp)
+	{
+		// TODO - process competition properties
+	}
+
+	/**
+	 * Receives the server configuration properties.
+	 */
+	public void handleMessage (java.util.Properties serverProps)
+	{
+		// TODO - adapt to the server setup.
+	}
 }

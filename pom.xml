@@ -31,6 +31,7 @@
 
   <!-- server components -->
   <modules>
+    <module>common</module>
     <module>server-interface</module>
     <module>accounting</module>
     <module>auctioneer</module>
@@ -45,6 +46,7 @@
     <module>server-main</module>
     <module>webapp-dependencies</module>
     <module>visualizer</module>
+    <module>sample-broker</module>
   </modules>
 
   <!-- Sonatype OSS repo for resolving snapshot modules -->

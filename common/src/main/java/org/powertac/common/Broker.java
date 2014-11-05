@@ -135,7 +135,7 @@ public class Broker
   {
     return idPrefix;
   }
-
+  
 //  /**
 //   * Returns a CashPosition representing the current cash balance for this
 //   * broker.
