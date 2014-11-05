@@ -32,9 +32,10 @@ public class BrokerMain
    */
   public static void main (String[] args)
   {
-    BrokerRunner runner = new BrokerRunner();
-    runner.processCmdLine(args);
-    
+      // replaced BrokerRunner with MultipleBrokerRunner
+      MultipleBrokerRunner mbr = new MultipleBrokerRunner();
+      mbr.processCmdLine(args);
+      
     // if we get here, it's time to exit
     System.exit(0);
   }
