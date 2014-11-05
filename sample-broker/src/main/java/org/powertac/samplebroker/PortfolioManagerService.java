@@ -19,10 +19,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.lang.Math;
 
 import org.apache.log4j.Logger;
 import org.joda.time.Instant;
 import org.powertac.common.Broker;
+import org.powertac.common.CashPosition;
 import org.powertac.common.Competition;
 import org.powertac.common.CustomerInfo;
 import org.powertac.common.Rate;
@@ -426,6 +429,67 @@ implements PortfolioManager, Initializable, Activatable
     }
   }
 
+  private void weightedMajority()
+  {
+    // Implementing generalized / randomized weighted majority
+    if (false) {
+      // Define this somewhere else... either in here or in the ContextManagerService
+      // which would be an object initialized in this service. Maps from Broker id
+      // (Broker.getID()) to a CashPosition, which is updated to contain each broker's
+      // current CashPosition at each time step. (Not sure if we'll actually need this).
+      // HashMap<Long, Cashposition> brokerCashPositions = new HashMap<Long, Cashposition>();
+      
+      // Define this elsewhere too. Each time step this should be updated to contain 
+      // the net gain / loss of the broker for that turn.
+      HashMap<Long, Double> brokerProfits = new HashMap<Long, Double>();
+      // Define this elsewhere too. Keeps track of the log weights of each broker 
+      // (-epsilon*loss)
+      HashMap<Long, Double> brokerWeights = new HashMap<Long, Double>();
+
+      // Find the max and min
+      Map.Entry<Long, Double> minEntry = null;
+      Map.Entry<Long, Double> maxEntry = null;
+      for (Map.Entry<Long, Double> entry : brokerProfits.entrySet()) {
+        if (maxEntry == null || entry.getValue() > maxEntry.getValue()) {
+          maxEntry = entry;
+        }
+        if (minEntry == null || entry.getValue() < minEntry.getValue()) {
+          minEntry = entry;
+        }
+      }
+
+      // Update the weights
+      double learningRate = 1;
+      double totalWeight = 0;
+      Map.Entry<Long, Double> bestExpert = null;
+      for (Map.Entry<Long, Double> entry : brokerProfits.entrySet()) {
+        // Calculate the loss of this broker
+        double loss = (maxEntry.getValue() - entry.getValue())/(maxEntry.getValue() - minEntry.getValue());
+        // Update the broker's weight
+        brokerWeights.put(entry.getKey(), entry.getValue() - learningRate*loss);
+
+        // Remember the largest weight (best expert) for use in follow-the-leader weighted majority
+        if (bestExpert == null || brokerWeights.get(entry.getKey()) > bestExpert.getValue()) {
+          bestExpert = entry;
+        }
+
+        // Calculate the total weight for use in randomized weighted majority
+        totalWeight += Math.exp(brokerWeights.get(entry.getKey()));
+      }
+
+      // Find the max weight and go with that expert
+      Map.Entry<Long, Double> maxWeight = null;
+      for (Map.Entry<Long, Double> entry : brokerProfits.entrySet()) {
+        if (maxWeight == null || entry.getValue() > maxWeight.getValue()) {
+          maxWeight = entry;
+        }
+      }
+      // return something eventually
+    }
+
+  }
+
+
   // Checks to see whether our tariffs need fine-tuning
   private void improveTariffs()
   {
@@ -495,6 +559,10 @@ implements PortfolioManager, Initializable, Activatable
         }
       }
     }
+
+    // Do weighted majority
+    weightedMajority();
+
   }
 
   // ------------- test-support methods ----------------
