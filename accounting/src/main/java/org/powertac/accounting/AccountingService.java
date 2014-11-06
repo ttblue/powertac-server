@@ -323,10 +323,10 @@ public class AccountingService
         broker.updateCash(interest);
       }
       // add the cash position to the list and send messages
-      brokerMsg.get(broker).add(txFactory.makeCashPosition(broker, broker.getCashBalance()));
-      log.info("Sending " + brokerMsg.get(broker).size() + " messages to " + broker.getUsername());
-      //brokerProxyService.sendMessages(broker, brokerMsg.get(broker));
-      brokerProxyService.broadcastMessage(brokerMsg.get(broker));
+      //log.info("Sending " + brokerMsg.get(broker).size() + " messages to " + broker.getUsername());
+      brokerProxyService.sendMessages(broker, brokerMsg.get(broker));
+      //brokerProxyService.broadcastMessage(brokerMsg.get(broker));
+      brokerProxyService.broadcastMessage(txFactory.makeCashPosition(broker, broker.getCashBalance()));
     }
     // send the distribution report
     brokerProxyService.broadcastMessage(distributionReport);

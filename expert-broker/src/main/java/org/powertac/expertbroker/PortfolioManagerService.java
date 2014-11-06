@@ -44,6 +44,7 @@ import org.powertac.common.repo.CustomerRepo;
 import org.powertac.common.repo.TariffRepo;
 import org.powertac.common.repo.TimeslotRepo;
 import org.powertac.expertbroker.core.BrokerPropertiesService;
+import org.powertac.expertbroker.core.MagicParameters;
 import org.powertac.expertbroker.interfaces.Activatable;
 import org.powertac.expertbroker.interfaces.BrokerContext;
 import org.powertac.expertbroker.interfaces.Initializable;
@@ -105,8 +106,8 @@ implements PortfolioManager, Initializable, Activatable
 	HashMap<CustomerInfo, CustomerRecord>> customerSubscriptions;
 	private HashMap<PowerType, List<TariffSpecification>> competingTariffs;
 	
-	// Keep track of broker weights
-	HashMap<Broker, Double> brokerWeights = new HashMap<Broker, Double>();
+	// Broker Parameters
+	private MagicParameters myParameters;
 
 	// Configurable parameters for tariff composition
 	// Override defaults in src/main/resources/config/broker.config

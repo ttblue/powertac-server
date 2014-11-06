@@ -152,6 +152,35 @@ public class BrokerProxyService implements BrokerProxy
       localSendMessage(broker, messageObject);
     }
   }
+  
+  /*
+   * (non-Javadoc)
+   * 
+   * @see
+   * org.powertac.common.interfaces.BrokerProxy#broadcastMessage(java.lang.Object
+   * )
+   */
+//  @Override
+  public void broadcastMessage (Object messageObject, boolean novisualizer)
+  {
+    if (deferredBroadcast) {
+      deferredMessages.add(messageObject);
+      return;
+    }
+
+    if (!novisualizer)
+	    // dispatch to visualizers
+	    visualizerProxyService.forwardMessage(messageObject);
+
+    Collection<Broker> brokers = brokerRepo.list();
+    for (Broker broker : brokers) {
+      // let's be JMS provider neutral and not take advance of special queues in
+      // ActiveMQ
+      // if we have JMS performance issue, we will look into optimization using
+      // ActiveMQ special queues.
+      localSendMessage(broker, messageObject);
+    }
+  }
 
   /*
    * (non-Javadoc)

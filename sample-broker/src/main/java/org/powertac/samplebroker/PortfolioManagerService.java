@@ -15,6 +15,7 @@
  */
 package org.powertac.samplebroker;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -44,6 +45,7 @@ import org.powertac.common.repo.CustomerRepo;
 import org.powertac.common.repo.TariffRepo;
 import org.powertac.common.repo.TimeslotRepo;
 import org.powertac.samplebroker.core.BrokerPropertiesService;
+import org.powertac.samplebroker.core.MagicParameters;
 import org.powertac.samplebroker.interfaces.Activatable;
 import org.powertac.samplebroker.interfaces.BrokerContext;
 import org.powertac.samplebroker.interfaces.Initializable;
@@ -105,8 +107,13 @@ implements PortfolioManager, Initializable, Activatable
 	HashMap<CustomerInfo, CustomerRecord>> customerSubscriptions;
 	private HashMap<PowerType, List<TariffSpecification>> competingTariffs;
 	
+	// Keep track of broker paramters
+	private HashMap<Broker, MagicParameters> brokerParameters;
 	// Keep track of broker weights
-	HashMap<Broker, Double> brokerWeights = new HashMap<Broker, Double>();
+	private HashMap<Broker, Double> brokerWeights;
+	
+	// Parameters of our own broker.
+	private MagicParameters myParameters;
 
 	// Configurable parameters for tariff composition
 	// Override defaults in src/main/resources/config/broker.config
@@ -147,6 +154,9 @@ implements PortfolioManager, Initializable, Activatable
 		customerSubscriptions = new HashMap<TariffSpecification,
 				HashMap<CustomerInfo, CustomerRecord>>();
 		competingTariffs = new HashMap<PowerType, List<TariffSpecification>>();
+		
+		brokerParameters = new HashMap<Broker, MagicParameters>();
+		brokerWeights = new HashMap<Broker, Double>();
 
 	}
 
@@ -480,6 +490,17 @@ implements PortfolioManager, Initializable, Activatable
 				bestBroker = entry.getKey();
 			}
 		}
+		
+		// Load parameters if not done yet
+		MagicParameters bestBrokerParameters = brokerParameters.get(bestBroker);
+		if (bestBrokerParameters == null) {
+			String configFileName = "config/" + bestBroker.getUsername() + ".properties";
+			File configFile = new File(configFileName);
+			bestBrokerParameters = new MagicParameters(configFile);
+			brokerParameters.put(bestBroker, bestBrokerParameters);
+		}
+		myParameters.updateParameters(bestBrokerParameters);
+		
 		return;
 	}
 
@@ -487,6 +508,7 @@ implements PortfolioManager, Initializable, Activatable
 	// Checks to see whether our tariffs need fine-tuning
 	private void improveTariffs()
 	{
+		//TODO: DO STUFF HERE WITH MAGIC PARAMETERS
 //		// quick magic-number hack to inject a balancing order
 //		int timeslotIndex = timeslotRepo.currentTimeslot().getSerialNumber();
 //		if (371 == timeslotIndex) {
