@@ -17,6 +17,7 @@ package org.powertac.samplebroker;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -89,6 +90,9 @@ implements PortfolioManager, Initializable, Activatable
   private MarketManager marketManager;
 
   @Autowired
+  private ContextManagerService contextManager;
+
+  @Autowired
   private TimeService timeService;
 
   // ---- Portfolio records -----
@@ -116,6 +120,16 @@ implements PortfolioManager, Initializable, Activatable
           description = "Default daily meter charge")
   private double defaultPeriodicPayment = -1.0;
 
+  private int numExperts;
+  private double lowerProductionBound;
+  private double upperProductionBound;
+  private double lowerConsumptionBound;
+  private double upperConsumptionBound;
+  private List<Double> expertConsumptionWeights;
+  private List<Double> expertConsumptionRates;
+  private List<Double> expertProductionWeights;
+  private List<Double> expertProductionRates;
+
   /**
    * Default constructor registers for messages, must be called after 
    * message router is available.
@@ -123,6 +137,23 @@ implements PortfolioManager, Initializable, Activatable
   public PortfolioManagerService ()
   {
     super();
+    lowerProductionBound = 0.2;
+    upperProductionBound = 1.5;
+    lowerConsumptionBound = 0.8;
+    upperConsumptionBound = 2.0;
+
+    expertConsumptionRates = new ArrayList<Double>();
+    expertConsumptionWeights = new ArrayList<Double>();
+    expertProductionWeights = new ArrayList<Double>();
+    expertProductionRates = new ArrayList<Double>();
+
+    for (int i = 0; i < numExperts; i++) {
+      expertConsumptionWeights.add(1.0);
+      expertConsumptionRates.add(lowerConsumptionBound + (upperConsumptionBound - lowerConsumptionBound)*(double)i/(double)numExperts);
+      expertProductionWeights.add(1.0);
+      expertProductionRates.add(lowerProductionBound + (upperProductionBound - lowerProductionBound)*(double)i/(double)numExperts);
+    }
+     
   }
 
   /**
@@ -396,14 +427,15 @@ implements PortfolioManager, Initializable, Activatable
     double marketPrice = marketManager.getMeanMarketPrice() / 1000.0;
     // for each power type representing a customer population,
     // create a tariff that's better than what's available
+
     for (PowerType pt : customerProfiles.keySet()) {
       // we'll just do fixed-rate tariffs for now
       double rateValue;
       if (pt.isConsumption())
-        rateValue = ((marketPrice + fixedPerKwh) * (1.0 + defaultMargin));
+        rateValue = ((marketPrice + fixedPerKwh) * expertConsumptionRates.get(10));
       else
-        //rateValue = (-1.0 * marketPrice / (1.0 + defaultMargin));
-        rateValue = -2.0 * marketPrice;
+        // rateValue = (-1.0 * marketPrice / expertProductionRates.get(50));
+        rateValue = -1.3 * marketPrice;
       if (pt.isInterruptible()) {
         rateValue *= 0.7; // Magic number!! price break for interruptible
       }
@@ -431,61 +463,54 @@ implements PortfolioManager, Initializable, Activatable
 
   private void weightedMajority()
   {
-    // Implementing generalized / randomized weighted majority
-    if (false) {
-      // Define this somewhere else... either in here or in the ContextManagerService
-      // which would be an object initialized in this service. Maps from Broker id
-      // (Broker.getID()) to a CashPosition, which is updated to contain each broker's
-      // current CashPosition at each time step. (Not sure if we'll actually need this).
-      // HashMap<Long, Cashposition> brokerCashPositions = new HashMap<Long, Cashposition>();
-      
-      // Define this elsewhere too. Each time step this should be updated to contain 
-      // the net gain / loss of the broker for that turn.
-      HashMap<Long, Double> brokerProfits = new HashMap<Long, Double>();
-      // Define this elsewhere too. Keeps track of the log weights of each broker 
-      // (-epsilon*loss)
-      HashMap<Long, Double> brokerWeights = new HashMap<Long, Double>();
 
-      // Find the max and min
-      Map.Entry<Long, Double> minEntry = null;
-      Map.Entry<Long, Double> maxEntry = null;
-      for (Map.Entry<Long, Double> entry : brokerProfits.entrySet()) {
-        if (maxEntry == null || entry.getValue() > maxEntry.getValue()) {
-          maxEntry = entry;
-        }
-        if (minEntry == null || entry.getValue() < minEntry.getValue()) {
-          minEntry = entry;
-        }
-      }
+    // HashMap<Long, Double> brokerProfits = new HashMap<Long, Double>();
+    // // Define this elsewhere too. Keeps track of the log weights of each broker 
+    // // (-epsilon*loss)
+    // HashMap<Long, Double> brokerWeights = new HashMap<Long, Double>();
 
-      // Update the weights
-      double learningRate = 1;
-      double totalWeight = 0;
-      Map.Entry<Long, Double> bestExpert = null;
-      for (Map.Entry<Long, Double> entry : brokerProfits.entrySet()) {
-        // Calculate the loss of this broker
-        double loss = (maxEntry.getValue() - entry.getValue())/(maxEntry.getValue() - minEntry.getValue());
-        // Update the broker's weight
-        brokerWeights.put(entry.getKey(), entry.getValue() - learningRate*loss);
+    // // Find the max and min
+    // Map.Entry<Long, Double> minEntry = null;
+    // Map.Entry<Long, Double> maxEntry = null;
+    // for (Map.Entry<Long, Double> entry : brokerProfits.entrySet()) {
+    //   if (maxEntry == null || entry.getValue() > maxEntry.getValue()) {
+    //     maxEntry = entry;
+    //   }
+    //   if (minEntry == null || entry.getValue() < minEntry.getValue()) {
+    //     minEntry = entry;
+    //   }
+    // }
 
-        // Remember the largest weight (best expert) for use in follow-the-leader weighted majority
-        if (bestExpert == null || brokerWeights.get(entry.getKey()) > bestExpert.getValue()) {
-          bestExpert = entry;
-        }
+    // Collections.max(arrayList)
 
-        // Calculate the total weight for use in randomized weighted majority
-        totalWeight += Math.exp(brokerWeights.get(entry.getKey()));
-      }
 
-      // Find the max weight and go with that expert
-      Map.Entry<Long, Double> maxWeight = null;
-      for (Map.Entry<Long, Double> entry : brokerProfits.entrySet()) {
-        if (maxWeight == null || entry.getValue() > maxWeight.getValue()) {
-          maxWeight = entry;
-        }
-      }
-      // return something eventually
-    }
+    // // Update the weights
+    // double learningRate = 1;
+    // double totalWeight = 0;
+    // Map.Entry<Long, Double> bestExpert = null;
+    // for (Map.Entry<Long, Double> entry : brokerProfits.entrySet()) {
+    //   // Calculate the loss of this broker
+    //   double loss = (maxEntry.getValue() - entry.getValue())/(maxEntry.getValue() - minEntry.getValue());
+    //   // Update the broker's weight
+    //   brokerWeights.put(entry.getKey(), entry.getValue() - learningRate*loss);
+
+    //   // Remember the largest weight (best expert) for use in follow-the-leader weighted majority
+    //   if (bestExpert == null || brokerWeights.get(entry.getKey()) > bestExpert.getValue()) {
+    //     bestExpert = entry;
+    //   }
+
+    //   // Calculate the total weight for use in randomized weighted majority
+    //   totalWeight += Math.exp(brokerWeights.get(entry.getKey()));
+    // }
+
+    // // Find the max weight and go with that expert
+    // Map.Entry<Long, Double> maxWeight = null;
+    // for (Map.Entry<Long, Double> entry : brokerProfits.entrySet()) {
+    //   if (maxWeight == null || entry.getValue() > maxWeight.getValue()) {
+    //     maxWeight = entry;
+    //   }
+    // }
+    // // return something eventually
 
   }
 

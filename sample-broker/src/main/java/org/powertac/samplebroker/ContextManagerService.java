@@ -91,6 +91,7 @@ implements Initializable
   {
     cash = cp.getBalance();
     log.info("Cash position: " + cash);
+    log.error("Cash position: " + cash);
   }
   
   /**

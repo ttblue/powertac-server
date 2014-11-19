@@ -45,6 +45,8 @@
     <module>server-main</module>
     <module>webapp-dependencies</module>
     <module>visualizer</module>
+    <module>server-distribution</module>
+    <module>sample-broker</module>
   </modules>
 
   <!-- Sonatype OSS repo for resolving snapshot modules -->

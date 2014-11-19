@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<powertac-bootstrap-data>
+<config>
+<competition id="0" name="game-0" timeslotLength="60" bootstrapTimeslotCount="336" bootstrapDiscardedTimeslots="24" minimumTimeslotCount="1400" expectedTimeslotCount="1440" timeslotsOpen="24" deactivateTimeslotsAhead="1" minimumOrderQuantity="0.01" timezoneOffset="-6" latitude="45" simulationRate="720" simulationModulo="3600000">
+  <description></description>
+  <simulationBaseTime>
+    <iMillis>1255132800000</iMillis>
+  </simulationBaseTime>
+  <broker>default broker</broker>
+  <customer id="2615" name="Village 2 RaS Base" population="10" powerType="CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="3407" name="WindmillCoOp@2" population="40" powerType="WIND_PRODUCTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="true" canNegotiate="false"/>
+  <customer id="2614" name="Village 2 NS Controllable" population="10" powerType="INTERRUPTIBLE_CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="3404" name="WindmillCoOp@1" population="50" powerType="WIND_PRODUCTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="true" canNegotiate="false"/>
+  <customer id="3336" name="CentervilleHomes" population="20000" powerType="CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="true" canNegotiate="false"/>
+  <customer id="2613" name="Village 2 NS Base" population="10" powerType="CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="3396" name="SunnyhillSolar" population="1" powerType="SOLAR_PRODUCTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="3328" name="BrooksideHomes" population="30000" powerType="CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="true" canNegotiate="false"/>
+  <customer id="2620" name="Village 2 SS Controllable" population="10" powerType="INTERRUPTIBLE_CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="2619" name="Village 2 SS Base" population="10" powerType="CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="2618" name="Village 2 ReS Controllable" population="10" powerType="INTERRUPTIBLE_CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="2617" name="Village 2 ReS Base" population="10" powerType="CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="2616" name="Village 2 RaS Controllable" population="10" powerType="INTERRUPTIBLE_CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="3423" name="OfficeComplex 1 SS Base" population="3" powerType="CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="1896" name="Village 1 RaS Controllable" population="10" powerType="INTERRUPTIBLE_CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="3422" name="OfficeComplex 1 NS Controllable" population="5" powerType="INTERRUPTIBLE_CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="3354" name="EastsideOffices" population="25" powerType="CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="true" canNegotiate="false"/>
+  <customer id="1897" name="Village 1 ReS Base" population="10" powerType="CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="3421" name="OfficeComplex 1 NS Base" population="5" powerType="CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="1898" name="Village 1 ReS Controllable" population="10" powerType="INTERRUPTIBLE_CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="1899" name="Village 1 SS Base" population="10" powerType="CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="1900" name="Village 1 SS Controllable" population="10" powerType="INTERRUPTIBLE_CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="3346" name="DowntownOffices" population="30" powerType="CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="true" canNegotiate="false"/>
+  <customer id="1893" name="Village 1 NS Base" population="10" powerType="CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="1894" name="Village 1 NS Controllable" population="10" powerType="INTERRUPTIBLE_CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="1895" name="Village 1 RaS Base" population="10" powerType="CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="3556" name="OfficeComplex 2 SS Controllable" population="3" powerType="INTERRUPTIBLE_CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="3553" name="OfficeComplex 2 NS Base" population="5" powerType="CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="3555" name="OfficeComplex 2 SS Base" population="3" powerType="CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="3374" name="HextraChemical" population="5" powerType="INTERRUPTIBLE_CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="true" canNegotiate="false"/>
+  <customer id="3554" name="OfficeComplex 2 NS Controllable" population="5" powerType="INTERRUPTIBLE_CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="3424" name="OfficeComplex 1 SS Controllable" population="3" powerType="INTERRUPTIBLE_CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="3364" name="FrostyStorage" population="3" powerType="INTERRUPTIBLE_CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="true" canNegotiate="false"/>
+  <customer id="3385" name="MedicalCenter@2" population="1" powerType="SOLAR_PRODUCTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+  <customer id="3382" name="MedicalCenter@1" population="1" powerType="CONSUMPTION" controllableKW="0.0" upRegulationKW="0.0" downRegulationKW="0.0" storageCapacity="0.0" multiContracting="false" canNegotiate="false"/>
+</competition>
+</config>
+<bootstrap-state>
+<properties>
+  <property name="customer.coldstorage.coldStorage.freezeco-3.currentTemp" value="-31.366715818372914"/>
+  <property name="customer.coldstorage.coldStorage.freezeco-1.currentTemp" value="-32.039667454369855"/>
+  <property name="customer.coldstorage.coldStorage.seafood-1.currentTemp" value="-25.534369103622467"/>
+  <property name="customer.coldstorage.coldStorage.freezeco-3.currentStock" value="450.0"/>
+  <property name="genco.cpGenco.coefficients" value="[0.0, 0.0, 0.0]"/>
+  <property name="customer.coldstorage.coldStorage.seafood-2.currentStock" value="900.0"/>
+  <property name="customer.coldstorage.coldStorage.freezeco-2.currentTemp" value="-17.160869697579482"/>
+  <property name="customer.coldstorage.coldStorage.freezeco-2.currentStock" value="375.0"/>
+  <property name="customer.coldstorage.coldStorage.seafood-1.currentStock" value="400.0"/>
+  <property name="customer.coldstorage.coldStorage.seafood-2.currentTemp" value="-20.751694848821664"/>
+  <property name="customer.coldstorage.coldStorage.freezeco-1.currentStock" value="250.0"/>
+</properties>
+</bootstrap-state>
+<bootstrap>
+<market-bootstrap-data id="4450">
+  <mwh></mwh>
+  <marketPrice></marketPrice>
+</market-bootstrap-data>
+<weather-report id="3" currentTimeslot="0" temperature="11.4" windSpeed="2.0" windDirection="100.0" cloudCover="1.0"/>
+<weather-report id="4" currentTimeslot="1" temperature="11.7" windSpeed="2.0" windDirection="160.0" cloudCover="1.0"/>
+<weather-report id="5" currentTimeslot="2" temperature="11.7" windSpeed="1.0" windDirection="150.0" cloudCover="1.0"/>
+<weather-report id="6" currentTimeslot="3" temperature="11.9" windSpeed="2.0" windDirection="140.0" cloudCover="1.0"/>
+</bootstrap>
+</powertac-bootstrap-data>
