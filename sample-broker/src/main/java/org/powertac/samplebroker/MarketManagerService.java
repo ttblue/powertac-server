@@ -18,6 +18,8 @@ package org.powertac.samplebroker;
 //import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Random;
+import java.util.ArrayList;
+import java.util.Collections;
 
 import org.apache.log4j.Logger;
 import org.powertac.common.BalancingTransaction;
@@ -252,17 +254,42 @@ implements MarketManager, Initializable, Activatable
   {
     double neededKWh = 0.0;
     log.debug("Current timeslot is " + timeslotRepo.currentTimeslot().getSerialNumber());
+    ArrayList<Double> estimatedEnergyCosts = new ArrayList<Double>();
+
     for (Timeslot timeslot : timeslotRepo.enabledTimeslots()) {
       int index = (timeslot.getSerialNumber()) % broker.getUsageRecordLength();
       neededKWh = portfolioManager.collectUsage(index);
-      submitOrder(neededKWh, timeslot.getSerialNumber());
+      // log.info("Broker usage record length: " + broker.getUsageRecordLength());
+      // log.info("Timeslot serial number " + timeslot.getSerialNumber());
+      // log.info("Index " + index);
+      // log.info("NeededKWh " + neededKWh);
+      estimatedEnergyCosts.add(submitOrder(neededKWh, timeslot.getSerialNumber()));
+      
     }
+
+    if (Math.abs(estimatedEnergyCosts.get(0)) > 0.0) {
+      // This is a positive number
+      portfolioManager.estimatedEnergyCost = Math.abs(estimatedEnergyCosts.get(0));
+      return;
+    }
+
+    Collections.sort(estimatedEnergyCosts);
+    double first = Math.abs(estimatedEnergyCosts.get(0);
+    double last = Math.abs(estimatedEnergyCosts.get(estimatedEnergyCosts.size() - 1);
+    double maxVal = (first > last) ? first : last;
+    if ( maxVal != 0 ) {
+      portfolioManager.estimatedEnergyCost = maxVal;
+    }
+    else {
+      portfolioManager.estimatedEnergyCost = meanMarketPrice;
+    }
+
   }
 
   /**
    * Composes and submits the appropriate order for the given timeslot.
    */
-  private void submitOrder (double neededKWh, int timeslot)
+  private double submitOrder(double neededKWh, int timeslot)
   {
     double neededMWh = neededKWh / 1000.0;
 
@@ -272,14 +299,17 @@ implements MarketManager, Initializable, Activatable
       neededMWh -= posn.getOverallBalance();
     if (Math.abs(neededMWh) <= minMWh) {
       log.info("no power required in timeslot " + timeslot);
-      return;
+      return 0.0;
     }
     Double limitPrice = computeLimitPrice(timeslot, neededMWh);
+
+
     log.info("new order for " + neededMWh + " at " + limitPrice +
              " in timeslot " + timeslot);
     Order order = new Order(broker.getBroker(), timeslot, neededMWh, limitPrice);
     lastOrder.put(timeslot, order);
     broker.sendMessage(order);
+    return limitPrice / neededKWh;
   }
 
   /**

@@ -21,6 +21,9 @@ package org.powertac.samplebroker.interfaces;
  */
 public interface PortfolioManager
 {
+  public double meanMarketPrice;
+  public double estimatedEnergyCost;
+
   /**
    * Returns total net expected usage across all subscriptions for the given
    * index (normally a timeslot serial number).

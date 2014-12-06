@@ -86,8 +86,8 @@ public class PortfolioManagerService
     @Autowired
     private CustomerRepo customerRepo;
 
-    @Autowired
-    private MarketManager marketManager;
+    // @Autowired
+    // private MarketManager marketManager;
 
     @Autowired
     private TimeService timeService;
@@ -130,6 +130,9 @@ public class PortfolioManagerService
 
     // the price at which we got the best profit
     private double pricePointForBestProfit = 0.0;
+
+    // keep track of timeslot
+    private int firstTimeslot = 0;
     
 
     /**
@@ -412,6 +415,13 @@ public class PortfolioManagerService
     @Override // from Activatable
     public synchronized void activate (int timeslotIndex)
     {
+        if (firstTimeslot == 0) { 
+            firstTimeslot = timeslotIndex;
+        }
+        else if ((timeslotIndex - firstTimeslot) % 6 != 0) {
+            return;
+        }
+
         //log.info("Time slot index: " + timeslotIndex);
         if (customerSubscriptions.size() == 0) {
             // we (most likely) have no tariffs
@@ -432,14 +442,15 @@ public class PortfolioManagerService
     {
         // remember that market prices are per mwh, but tariffs are by kwh
         double marketPrice = marketManager.getMeanMarketPrice() / 1000.0;
-        double priceTick = 1.0/numExperts;
-        double startPrice = marketPrice - (priceTick * numExperts/2);
-        double endPrice = marketPrice +  (priceTick * numExperts/2);
+        double upperBound = 9;
+        double lowerBound = 0.25;
+        double startPrice = (1 + upperBound) * marketPrice;
+        double endPrice = (1 - lowerBound) * marketPrice;
         double price = startPrice;
         while(price < endPrice) {
             expertConsumptionPrices.add(price);
             expertConsumptionWeights.add(1.0);
-            price += priceTick;
+            price += (endPrice - startPrice) / numExperts;
         }
 
         log.warn("startPrice " + startPrice + " endPrice " + endPrice);
@@ -481,6 +492,7 @@ public class PortfolioManagerService
             customerSubscriptions.put(spec, new HashMap<CustomerInfo, CustomerRecord>());
             tariffRepo.addSpecification(spec);
             brokerContext.sendMessage(spec);
+            break;
         }
     }
 
