@@ -67,757 +67,778 @@ import org.springframework.stereotype.Service;
  */
 @Service // Spring creates a single instance at startup
 public class PortfolioManagerService 
-implements PortfolioManager, Initializable, Activatable
+    implements PortfolioManager, Initializable, Activatable
 {
-	static private Logger log = Logger.getLogger(PortfolioManagerService.class);
+    static private Logger log = Logger.getLogger(PortfolioManagerService.class);
 
-	private BrokerContext brokerContext; // master
+    private BrokerContext brokerContext; // master
 
-	// Spring fills in Autowired dependencies through a naming convention
-	@Autowired
-	private BrokerPropertiesService propertiesService;
+    // Spring fills in Autowired dependencies through a naming convention
+    @Autowired
+    private BrokerPropertiesService propertiesService;
 
-	@Autowired
-	private TimeslotRepo timeslotRepo;
+    @Autowired
+    private TimeslotRepo timeslotRepo;
 
-	@Autowired
-	private TariffRepo tariffRepo;
+    @Autowired
+    private TariffRepo tariffRepo;
 
-	@Autowired
-	private CustomerRepo customerRepo;
+    @Autowired
+    private CustomerRepo customerRepo;
 
-	@Autowired
-	private MarketManager marketManager;
+    @Autowired
+    private MarketManager marketManager;
 
-	@Autowired
-	private TimeService timeService;
+    @Autowired
+    private TimeService timeService;
 
-	// ---- Portfolio records -----
-	// Customer records indexed by power type and by tariff. Note that the
-	// CustomerRecord instances are NOT shared between these structures, because
-	// we need to keep track of subscriptions by tariff.
-	private HashMap<PowerType,
+    // ---- Portfolio records -----
+    // Customer records indexed by power type and by tariff. Note that the
+    // CustomerRecord instances are NOT shared between these structures, because
+    // we need to keep track of subscriptions by tariff.
+    private HashMap<PowerType,
 	HashMap<CustomerInfo, CustomerRecord>> customerProfiles;
-	private HashMap<TariffSpecification, 
+    private HashMap<TariffSpecification, 
 	HashMap<CustomerInfo, CustomerRecord>> customerSubscriptions;
-	private HashMap<PowerType, List<TariffSpecification>> competingTariffs;
+    private HashMap<PowerType, List<TariffSpecification>> competingTariffs;
 
-	// Configurable parameters for tariff composition
-	// Override defaults in src/main/resources/config/broker.config
-	// or in top-level config file
-	@ConfigurableValue(valueType = "Double",
-			description = "target profit margin")
-	private double defaultMargin = 0.5;
+    // Configurable parameters for tariff composition
+    // Override defaults in src/main/resources/config/broker.config
+    // or in top-level config file
+    @ConfigurableValue(valueType = "Double",
+                       description = "target profit margin")
+                       private double defaultMargin = 0.5;
 
-	@ConfigurableValue(valueType = "Double",
-			description = "Fixed cost/kWh")
-	private double fixedPerKwh = -0.06;
+    @ConfigurableValue(valueType = "Double",
+                       description = "Fixed cost/kWh")
+                       private double fixedPerKwh = -0.06;
 
-	@ConfigurableValue(valueType = "Double",
-			description = "Default daily meter charge")
-	private double defaultPeriodicPayment = -1.0;
+    @ConfigurableValue(valueType = "Double",
+                       description = "Default daily meter charge")
+                       private double defaultPeriodicPayment = -1.0;
 
-	private int numExperts;
-	private double lowerProductionBound;
-	private double upperProductionBound;
-	private double lowerConsumptionBound;
-	private double upperConsumptionBound;
-	private List<Double> expertConsumptionWeights;
-	private List<Double> expertConsumptionRates;
-	private List<Double> expertProductionWeights;
-	private List<Double> expertProductionRates;
+    private int numExperts = 100;
+    private List<Double> expertConsumptionWeights;
+    private List<Double> expertConsumptionPrices;
+    private List<Double> expertProductionWeights;
+    private List<Double> expertProductionRates;
 
-	// current cash balance and last profit
-	private double cash = 0.0;
-	private double profit = 0.0;
-	private double bestProfit = 0.0;
+    // current cash balance and last profit
+    private double cash = 0.0;
+    private double profit = 0.0;
+    private double bestProfit = 0.0;
 
-	/**
-	 * Default constructor registers for messages, must be called after 
-	 * message router is available.
-	 */
-	public PortfolioManagerService ()
-	{
-		super();
-		lowerProductionBound = 0.2;
-		upperProductionBound = 1.5;
-		lowerConsumptionBound = 0.8;
-		upperConsumptionBound = 2.0;
+    // the price at which we got the best profit
+    private double pricePointForBestProfit = 0.0;
+    
 
-		expertConsumptionRates = new ArrayList<Double>();
-		expertConsumptionWeights = new ArrayList<Double>();
-		expertProductionWeights = new ArrayList<Double>();
-		expertProductionRates = new ArrayList<Double>();
+    /**
+     * Default constructor registers for messages, must be called after 
+     * message router is available.
+     */
+    public PortfolioManagerService ()
+    {
+        super();
+        
+        expertConsumptionPrices = new ArrayList<Double>();
+        expertConsumptionWeights = new ArrayList<Double>();
+        expertProductionWeights = new ArrayList<Double>();
+        expertProductionRates = new ArrayList<Double>();
+    }
 
-		for (int i = 0; i < numExperts; i++) {
-			expertConsumptionWeights.add(1.0);
-			expertConsumptionRates.add(lowerConsumptionBound + (upperConsumptionBound - lowerConsumptionBound)*(double)i/(double)numExperts);
-			expertProductionWeights.add(1.0);
-			expertProductionRates.add(lowerProductionBound + (upperProductionBound - lowerProductionBound)*(double)i/(double)numExperts);
-		}
+    /**
+     * Per-game initialization. Configures parameters and registers
+     * message handlers.
+     */
+    @Override // from Initializable
+    //  @SuppressWarnings("unchecked")
+    public void initialize (BrokerContext context)
+    {
+        this.brokerContext = context;
+        propertiesService.configureMe(this);
+        customerProfiles = new HashMap<PowerType,
+            HashMap<CustomerInfo, CustomerRecord>>();
+        customerSubscriptions = new HashMap<TariffSpecification,
+            HashMap<CustomerInfo, CustomerRecord>>();
+        competingTariffs = new HashMap<PowerType, List<TariffSpecification>>();
+    }
 
-	}
+    // -------------- data access ------------------
 
-	/**
-	 * Per-game initialization. Configures parameters and registers
-	 * message handlers.
-	 */
-	@Override // from Initializable
-	//  @SuppressWarnings("unchecked")
-	public void initialize (BrokerContext context)
-	{
-		this.brokerContext = context;
-		propertiesService.configureMe(this);
-		customerProfiles = new HashMap<PowerType,
-				HashMap<CustomerInfo, CustomerRecord>>();
-		customerSubscriptions = new HashMap<TariffSpecification,
-				HashMap<CustomerInfo, CustomerRecord>>();
-		competingTariffs = new HashMap<PowerType, List<TariffSpecification>>();
-	}
+    /**
+     * Returns the CustomerRecord for the given type and customer, creating it
+     * if necessary.
+     */
+    CustomerRecord getCustomerRecordByPowerType (PowerType type,
+                                                 CustomerInfo customer)
+    {
+        HashMap<CustomerInfo, CustomerRecord> customerMap =
+            customerProfiles.get(type);
+        if (customerMap == null) {
+            customerMap = new HashMap<CustomerInfo, CustomerRecord>();
+            customerProfiles.put(type, customerMap);
+        }
+        CustomerRecord record = customerMap.get(customer);
+        if (record == null) {
+            record = new CustomerRecord(customer);
+            customerMap.put(customer, record);
+        }
+        return record;
+    }
 
-	// -------------- data access ------------------
+    /**
+     * Returns the customer record for the given tariff spec and customer,
+     * creating it if necessary. 
+     */
+    CustomerRecord getCustomerRecordByTariff (TariffSpecification spec,
+                                              CustomerInfo customer)
+    {
+        HashMap<CustomerInfo, CustomerRecord> customerMap =
+            customerSubscriptions.get(spec);
+        if (customerMap == null) {
+            customerMap = new HashMap<CustomerInfo, CustomerRecord>();
+            customerSubscriptions.put(spec, customerMap);
+        }
+        CustomerRecord record = customerMap.get(customer);
+        if (record == null) {
+            // seed with the generic record for this customer
+            record =
+                new CustomerRecord(getCustomerRecordByPowerType(spec.getPowerType(),
+                                                                customer));
+            customerMap.put(customer, record);
+        }
+        return record;
+    }
 
-	/**
-	 * Returns the CustomerRecord for the given type and customer, creating it
-	 * if necessary.
-	 */
-	CustomerRecord getCustomerRecordByPowerType (PowerType type,
-			CustomerInfo customer)
-	{
-		HashMap<CustomerInfo, CustomerRecord> customerMap =
-				customerProfiles.get(type);
-		if (customerMap == null) {
-			customerMap = new HashMap<CustomerInfo, CustomerRecord>();
-			customerProfiles.put(type, customerMap);
-		}
-		CustomerRecord record = customerMap.get(customer);
-		if (record == null) {
-			record = new CustomerRecord(customer);
-			customerMap.put(customer, record);
-		}
-		return record;
-	}
+    /**
+     * Finds the list of competing tariffs for the given PowerType.
+     */
+    List<TariffSpecification> getCompetingTariffs (PowerType powerType)
+    {
+        List<TariffSpecification> result = competingTariffs.get(powerType);
+        if (result == null) {
+            result = new ArrayList<TariffSpecification>();
+            competingTariffs.put(powerType, result);
+        }
+        return result;
+    }
 
-	/**
-	 * Returns the customer record for the given tariff spec and customer,
-	 * creating it if necessary. 
-	 */
-	CustomerRecord getCustomerRecordByTariff (TariffSpecification spec,
-			CustomerInfo customer)
-	{
-		HashMap<CustomerInfo, CustomerRecord> customerMap =
-				customerSubscriptions.get(spec);
-		if (customerMap == null) {
-			customerMap = new HashMap<CustomerInfo, CustomerRecord>();
-			customerSubscriptions.put(spec, customerMap);
-		}
-		CustomerRecord record = customerMap.get(customer);
-		if (record == null) {
-			// seed with the generic record for this customer
-			record =
-					new CustomerRecord(getCustomerRecordByPowerType(spec.getPowerType(),
-							customer));
-			customerMap.put(customer, record);
-		}
-		return record;
-	}
+    /**
+     * Adds a new competing tariff to the list.
+     */
+    private void addCompetingTariff (TariffSpecification spec)
+    {
+        getCompetingTariffs(spec.getPowerType()).add(spec);
+    }
 
-	/**
-	 * Finds the list of competing tariffs for the given PowerType.
-	 */
-	List<TariffSpecification> getCompetingTariffs (PowerType powerType)
-	{
-		List<TariffSpecification> result = competingTariffs.get(powerType);
-		if (result == null) {
-			result = new ArrayList<TariffSpecification>();
-			competingTariffs.put(powerType, result);
-		}
-		return result;
-	}
+    /**
+     * Returns total usage for a given timeslot (represented as a simple index).
+     */
+    @Override
+    public double collectUsage (int index)
+    {
+        double result = 0.0;
+        for (HashMap<CustomerInfo, CustomerRecord> customerMap : customerSubscriptions.values()) {
+            for (CustomerRecord record : customerMap.values()) {
+                result += record.getUsage(index);
+            }
+        }
+        return -result; // convert to needed energy account balance
+    }
 
-	/**
-	 * Adds a new competing tariff to the list.
-	 */
-	private void addCompetingTariff (TariffSpecification spec)
-	{
-		getCompetingTariffs(spec.getPowerType()).add(spec);
-	}
-
-	/**
-	 * Returns total usage for a given timeslot (represented as a simple index).
-	 */
-	@Override
-	public double collectUsage (int index)
-	{
-		double result = 0.0;
-		for (HashMap<CustomerInfo, CustomerRecord> customerMap : customerSubscriptions.values()) {
-			for (CustomerRecord record : customerMap.values()) {
-				result += record.getUsage(index);
-			}
-		}
-		return -result; // convert to needed energy account balance
-	}
-
-	// -------------- Message handlers -------------------
-	/**
-	 * Handles CustomerBootstrapData by populating the customer model 
-	 * corresponding to the given customer and power type. This gives the
-	 * broker a running start.
-	 */
-	public void handleMessage (CustomerBootstrapData cbd)
-	{
-		CustomerInfo customer =
-				customerRepo.findByNameAndPowerType(cbd.getCustomerName(),
+    // -------------- Message handlers -------------------
+    /**
+     * Handles CustomerBootstrapData by populating the customer model 
+     * corresponding to the given customer and power type. This gives the
+     * broker a running start.
+     */
+    public void handleMessage (CustomerBootstrapData cbd)
+    {
+        CustomerInfo customer =
+            customerRepo.findByNameAndPowerType(cbd.getCustomerName(),
 						cbd.getPowerType());
-		CustomerRecord record = getCustomerRecordByPowerType(cbd.getPowerType(), customer);
-		int offset = (timeslotRepo.currentTimeslot().getSerialNumber()
-				- cbd.getNetUsage().length);
-		int subs = record.subscribedPopulation;
-		record.subscribedPopulation = customer.getPopulation();
-		for (int i = 0; i < cbd.getNetUsage().length; i++) {
-			record.produceConsume(cbd.getNetUsage()[i], i);
-		}
-		record.subscribedPopulation = subs;
-	}
+        CustomerRecord record = getCustomerRecordByPowerType(cbd.getPowerType(), customer);
+        int offset = (timeslotRepo.currentTimeslot().getSerialNumber()
+                      - cbd.getNetUsage().length);
+        int subs = record.subscribedPopulation;
+        record.subscribedPopulation = customer.getPopulation();
+        for (int i = 0; i < cbd.getNetUsage().length; i++) {
+            record.produceConsume(cbd.getNetUsage()[i], i);
+        }
+        record.subscribedPopulation = subs;
+    }
 
-	/**
-	 * CashPosition updates our current bank balance.
-	 */
-	public void handleMessage (CashPosition cp)
-	{
-		profit = cp.getBalance() - cash; 
-		cash += profit;
-		log.info("Cash position: " + cash);
-		log.info("Profit: " + profit);
+    /**
+     * CashPosition updates our current bank balance.
+     */
+    public void handleMessage (CashPosition cp)
+    {
+        profit = cp.getBalance() - cash; 
+        cash += profit;
+        log.info("Cash position: " + cash);
+        log.info("Profit: " + profit);
 
-		// cannot update bestProfit here - it should be updated in improveTariffs method
-	}
+        // cannot update bestProfit here - it should be updated in improveTariffs method
+    }
 
-	/**
-	 * Handles a TariffSpecification. These are sent by the server when new tariffs are
-	 * published. If it's not ours, then it's a competitor's tariff. We keep track of 
-	 * competing tariffs locally, and we also store them in the tariffRepo.
-	 */
-	public synchronized void handleMessage (TariffSpecification spec)
-	{
-		Broker theBroker = spec.getBroker();
-		if (brokerContext.getBrokerUsername().equals(theBroker.getUsername())) {
-			if (theBroker != brokerContext.getBroker())
-				// strange bug, seems harmless for now
-				log.info("Resolution failed for broker " + theBroker.getUsername());
-			// if it's ours, just log it, because we already put it in the repo
-			TariffSpecification original =
-					tariffRepo.findSpecificationById(spec.getId());
-			if (null == original)
-				log.error("Spec " + spec.getId() + " not in local repo");
-			log.info("published " + spec);
-		}
-		else {
-			// otherwise, keep track of competing tariffs, and record in the repo
-			addCompetingTariff(spec);
-			tariffRepo.addSpecification(spec);
-		}
-	}
+    /**
+     * Handles a TariffSpecification. These are sent by the server when new tariffs are
+     * published. If it's not ours, then it's a competitor's tariff. We keep track of 
+     * competing tariffs locally, and we also store them in the tariffRepo.
+     */
+    public synchronized void handleMessage (TariffSpecification spec)
+    {
+        Broker theBroker = spec.getBroker();
+        if (brokerContext.getBrokerUsername().equals(theBroker.getUsername())) {
+            if (theBroker != brokerContext.getBroker())
+                // strange bug, seems harmless for now
+                log.info("Resolution failed for broker " + theBroker.getUsername());
+            // if it's ours, just log it, because we already put it in the repo
+            TariffSpecification original =
+                tariffRepo.findSpecificationById(spec.getId());
+            if (null == original)
+                log.error("Spec " + spec.getId() + " not in local repo");
+            log.info("published " + spec);
+        }
+        else {
+            // otherwise, keep track of competing tariffs, and record in the repo
+            addCompetingTariff(spec);
+            tariffRepo.addSpecification(spec);
+        }
+    }
 
-	/**
-	 * Handles a TariffStatus message. This should do something when the status
-	 * is not SUCCESS.
-	 */
-	public synchronized void handleMessage (TariffStatus ts)
-	{
-		log.info("TariffStatus: " + ts.getStatus());
-	}
+    /**
+     * Handles a TariffStatus message. This should do something when the status
+     * is not SUCCESS.
+     */
+    public synchronized void handleMessage (TariffStatus ts)
+    {
+        log.info("TariffStatus: " + ts.getStatus());
+    }
 
-	/**
-	 * Handles a TariffTransaction. We only care about certain types: PRODUCE,
-	 * CONSUME, SIGNUP, and WITHDRAW.
-	 */
-	public synchronized void handleMessage(TariffTransaction ttx)
-	{
-		// make sure we have this tariff
-		TariffSpecification newSpec = ttx.getTariffSpec();
-		if (newSpec == null) {
-			log.error("TariffTransaction type=" + ttx.getTxType()
-					+ " for unknown spec");
-		}
-		else {
-			TariffSpecification oldSpec =
-					tariffRepo.findSpecificationById(newSpec.getId());
-			if (oldSpec != newSpec) {
-				log.error("Incoming spec " + newSpec.getId() + " not matched in repo");
-			}
-		}
-		TariffTransaction.Type txType = ttx.getTxType();
-		CustomerRecord record = getCustomerRecordByTariff(ttx.getTariffSpec(),
-				ttx.getCustomerInfo());
+    /**
+     * Handles a TariffTransaction. We only care about certain types: PRODUCE,
+     * CONSUME, SIGNUP, and WITHDRAW.
+     */
+    public synchronized void handleMessage(TariffTransaction ttx)
+    {
+        // make sure we have this tariff
+        TariffSpecification newSpec = ttx.getTariffSpec();
+        if (newSpec == null) {
+            log.error("TariffTransaction type=" + ttx.getTxType()
+                      + " for unknown spec");
+        }
+        else {
+            TariffSpecification oldSpec =
+                tariffRepo.findSpecificationById(newSpec.getId());
+            if (oldSpec != newSpec) {
+                log.error("Incoming spec " + newSpec.getId() + " not matched in repo");
+            }
+        }
+        TariffTransaction.Type txType = ttx.getTxType();
+        CustomerRecord record = getCustomerRecordByTariff(ttx.getTariffSpec(),
+                                                          ttx.getCustomerInfo());
 
-		if (TariffTransaction.Type.SIGNUP == txType) {
-			// keep track of customer counts
-			record.signup(ttx.getCustomerCount());
-		}
-		else if (TariffTransaction.Type.WITHDRAW == txType) {
-			// customers presumably found a better deal
-			record.withdraw(ttx.getCustomerCount());
-		}
-		else if (TariffTransaction.Type.PRODUCE == txType) {
-			// if ttx count and subscribe population don't match, it will be hard
-			// to estimate per-individual production
-			if (ttx.getCustomerCount() != record.subscribedPopulation) {
-				log.warn("production by subset " + ttx.getCustomerCount() +
-						" of subscribed population " + record.subscribedPopulation);
-			}
-			record.produceConsume(ttx.getKWh(), ttx.getPostedTime());
-		}
-		else if (TariffTransaction.Type.CONSUME == txType) {
-			if (ttx.getCustomerCount() != record.subscribedPopulation) {
-				log.warn("consumption by subset " + ttx.getCustomerCount() +
-						" of subscribed population " + record.subscribedPopulation);
-			}
-			record.produceConsume(ttx.getKWh(), ttx.getPostedTime());      
-		}
-	}
+        if (TariffTransaction.Type.SIGNUP == txType) {
+            // keep track of customer counts
+            record.signup(ttx.getCustomerCount());
+        }
+        else if (TariffTransaction.Type.WITHDRAW == txType) {
+            // customers presumably found a better deal
+            record.withdraw(ttx.getCustomerCount());
+        }
+        else if (TariffTransaction.Type.PRODUCE == txType) {
+            // if ttx count and subscribe population don't match, it will be hard
+            // to estimate per-individual production
+            if (ttx.getCustomerCount() != record.subscribedPopulation) {
+                log.warn("production by subset " + ttx.getCustomerCount() +
+                         " of subscribed population " + record.subscribedPopulation);
+            }
+            record.produceConsume(ttx.getKWh(), ttx.getPostedTime());
+        }
+        else if (TariffTransaction.Type.CONSUME == txType) {
+            if (ttx.getCustomerCount() != record.subscribedPopulation) {
+                log.warn("consumption by subset " + ttx.getCustomerCount() +
+                         " of subscribed population " + record.subscribedPopulation);
+            }
+            record.produceConsume(ttx.getKWh(), ttx.getPostedTime());      
+        }
+    }
 
-	/**
-	 * Handles a TariffRevoke message from the server, indicating that some
-	 * tariff has been revoked.
-	 */
-	public synchronized void handleMessage (TariffRevoke tr)
-	{
-		Broker source = tr.getBroker();
-		log.info("Revoke tariff " + tr.getTariffId()
-				+ " from " + tr.getBroker().getUsername());
-		// if it's from some other broker, we need to remove it from the
-		// tariffRepo, and from the competingTariffs list
-		if (!(source.getUsername().equals(brokerContext.getBrokerUsername()))) {
-			log.info("clear out competing tariff");
-			TariffSpecification original =
-					tariffRepo.findSpecificationById(tr.getTariffId());
-			if (null == original) {
-				log.warn("Original tariff " + tr.getTariffId() + " not found");
-				return;
-			}
-			tariffRepo.removeSpecification(original.getId());
-			List<TariffSpecification> candidates =
-					competingTariffs.get(original.getPowerType());
-			if (null == candidates) {
-				log.warn("Candidate list is null");
-				return;
-			}
-			candidates.remove(original);
-		}
-	}
+    /**
+     * Handles a TariffRevoke message from the server, indicating that some
+     * tariff has been revoked.
+     */
+    public synchronized void handleMessage (TariffRevoke tr)
+    {
+        Broker source = tr.getBroker();
+        log.info("Revoke tariff " + tr.getTariffId()
+                 + " from " + tr.getBroker().getUsername());
+        // if it's from some other broker, we need to remove it from the
+        // tariffRepo, and from the competingTariffs list
+        if (!(source.getUsername().equals(brokerContext.getBrokerUsername()))) {
+            log.info("clear out competing tariff");
+            TariffSpecification original =
+                tariffRepo.findSpecificationById(tr.getTariffId());
+            if (null == original) {
+                log.warn("Original tariff " + tr.getTariffId() + " not found");
+                return;
+            }
+            tariffRepo.removeSpecification(original.getId());
+            List<TariffSpecification> candidates =
+                competingTariffs.get(original.getPowerType());
+            if (null == candidates) {
+                log.warn("Candidate list is null");
+                return;
+            }
+            candidates.remove(original);
+        }
+    }
 
-	/**
-	 * Handles a BalancingControlEvent, sent when a BalancingOrder is
-	 * exercised by the DU.
-	 */
-	public synchronized void handleMessage (BalancingControlEvent bce)
-	{
-		log.info("BalancingControlEvent " + bce.getKwh());
-	}
+    /**
+     * Handles a BalancingControlEvent, sent when a BalancingOrder is
+     * exercised by the DU.
+     */
+    public synchronized void handleMessage (BalancingControlEvent bce)
+    {
+        log.info("BalancingControlEvent " + bce.getKwh());
+    }
 
-	// --------------- activation -----------------
-	/**
-	 * Called after TimeslotComplete msg received. Note that activation order
-	 * among modules is non-deterministic.
-	 */
-	@Override // from Activatable
-	public synchronized void activate (int timeslotIndex)
-	{
-		//log.info("Time slot index: " + timeslotIndex);
-		if (customerSubscriptions.size() == 0) {
-			// we (most likely) have no tariffs
-			log.info("Time slot index first: " + timeslotIndex);
-			log.info("ABCDEF");
-			createInitialTariffs();
-		}
-		else {
-			// we have some, are they good enough?
-			log.info("Time slot index after: " + timeslotIndex);
-			improveTariffs();
-		}
-	}
+    // --------------- activation -----------------
+    /**
+     * Called after TimeslotComplete msg received. Note that activation order
+     * among modules is non-deterministic.
+     */
+    @Override // from Activatable
+    public synchronized void activate (int timeslotIndex)
+    {
+        //log.info("Time slot index: " + timeslotIndex);
+        if (customerSubscriptions.size() == 0) {
+            // we (most likely) have no tariffs
+            log.info("Time slot index first: " + timeslotIndex);
+            log.info("ABCDEF");
+            createInitialTariffs();
+        }
+        else {
+            // we have some, are they good enough?
+            log.info("Time slot index after: " + timeslotIndex);
+            improveTariffs();
+        }
+    }
 
-	// Creates initial tariffs for the main power types. These are simple
-	// fixed-rate two-part tariffs that give the broker a fixed margin.
-	private void createInitialTariffs ()
-	{
-		// remember that market prices are per mwh, but tariffs are by kwh
-		double marketPrice = marketManager.getMeanMarketPrice() / 1000.0;
-		log.info("Market price: " + marketPrice);
-		// for each power type representing a customer population,
-		// create a tariff that's better than what's available
+    // Creates initial tariffs for the main power types. These are simple
+    // fixed-rate two-part tariffs that give the broker a fixed margin.
+    private void createInitialTariffs ()
+    {
+        // remember that market prices are per mwh, but tariffs are by kwh
+        double marketPrice = marketManager.getMeanMarketPrice() / 1000.0;
+        double priceTick = 1.0/numExperts;
+        double startPrice = marketPrice - (priceTick * numExperts/2);
+        double endPrice = marketPrice +  (priceTick * numExperts/2);
+        double price = startPrice;
+        while(price < endPrice) {
+            expertConsumptionPrices.add(price);
+            expertConsumptionWeights.add(1.0);
+            price += priceTick;
+        }
 
-		for (PowerType pt : customerProfiles.keySet()) {
-			// we'll just do fixed-rate tariffs for now
-			double rateValue = 0.0;
-			if (pt.isConsumption())
-				//        rateValue = ((marketPrice + fixedPerKwh) * expertConsumptionRates.get(10));
-				rateValue = ((marketPrice + fixedPerKwh) * (1 + defaultMargin));
-			else
-				//rateValue = (-1.0 * marketPrice / expertProductionRates.get(50));
-				rateValue = -2.0 * marketPrice;
-			//      if (pt.isInterruptible()) {
-			//        rateValue *= 0.7; // Magic number!! price break for interruptible
-			//      }
-			TariffSpecification spec =
-					new TariffSpecification(brokerContext.getBroker(), pt)
-			.withPeriodicPayment(defaultPeriodicPayment);
-			Rate rate = new Rate().withValue(rateValue);
-			//      if (pt.isInterruptible()) {
-			//        // set max curtailment
-			//        rate.withMaxCurtailment(0.1);
-			//      }
-			//      if (pt.isStorage()) {
-			//        // add a RegulationRate
-			//        RegulationRate rr = new RegulationRate();
-			//        rr.withUpRegulationPayment(-rateValue * 0.5)
-			//            .withDownRegulationPayment(rateValue * 0.5); // magic numbers
-			//        spec.addRate(rr);
-			//      }
-			spec.addRate(rate);
-			customerSubscriptions.put(spec, new HashMap<CustomerInfo, CustomerRecord>());
-			tariffRepo.addSpecification(spec);
-			brokerContext.sendMessage(spec);
-		}
-	}
+        log.warn("startPrice " + startPrice + " endPrice " + endPrice);
+       
+        log.info("ExpertConsumptionPrices.size() " + expertConsumptionPrices.size());
+        
+        // for each power type representing a customer population,
+        // create a tariff that's better than what's available
 
-	private double weightedMajority(double currentPrice, double meanMarketPrice, double penaltyFactor)
-	{
-		double suggestedPrice = 0.0;
-		double totalWeight = 0.0;
+        for (PowerType pt : customerProfiles.keySet()) {
+            // we'll just do fixed-rate tariffs for now
+            double rateValue = 0.0;
+            if (pt.isConsumption()) {
+                rateValue = ((marketPrice + fixedPerKwh) * (1 + defaultMargin));
+            }
+            else {
+                rateValue = -2.0 * marketPrice;
+            }
+            //      if (pt.isInterruptible()) {
+            //        rateValue *= 0.7; // Magic number!! price break for interruptible
+            //      }
 
+            TariffSpecification spec =
+                new TariffSpecification(brokerContext.getBroker(), pt)
+                .withPeriodicPayment(defaultPeriodicPayment);
+            Rate rate = new Rate().withValue(rateValue);
+            //      if (pt.isInterruptible()) {
+            //        // set max curtailment
+            //        rate.withMaxCurtailment(0.1);
+            //      }
+            //      if (pt.isStorage()) {
+            //        // add a RegulationRate
+            //        RegulationRate rr = new RegulationRate();
+            //        rr.withUpRegulationPayment(-rateValue * 0.5)
+            //            .withDownRegulationPayment(rateValue * 0.5); // magic numbers
+            //        spec.addRate(rr);
+            //      }
+            spec.addRate(rate);
+            customerSubscriptions.put(spec, new HashMap<CustomerInfo, CustomerRecord>());
+            tariffRepo.addSpecification(spec);
+            brokerContext.sendMessage(spec);
+        }
+    }
 
-		// if our current profit is greater than the bestProfit
-		if(profit > bestProfit) {
+    private double weightedMajority(double currentPrice, double meanMarketPrice, double penaltyFactor)
+    {
+        double suggestedPrice = pricePointForBestProfit;
+        double totalWeight = 0.0;
 
-			// the rate will be negative => 
-			// we penalize experts whose predicted price is > currentPrice
-			for (int idx = 0; idx < numExperts; ++idx) {
+        // for consumption, the more negative the price, the better our profit
+        // we iterate through the list of experts and dock every expert whose price
+        // is larger than the current price - we are penalizing experts who want us to
+        // reduce the price 
 
-				if(expertConsumptionRates.get(idx) * meanMarketPrice > currentPrice) {
-					expertConsumptionWeights.set(idx, expertConsumptionWeights.get(idx)*penaltyFactor);
+        // if our current profit is greater than the bestProfit
+        if(profit > bestProfit) {
 
-					// accumulate suggestedPrice
-					suggestedPrice += expertConsumptionRates.get(idx) * expertConsumptionWeights.get(idx) * meanMarketPrice;
+            for (int idx = 0; idx < numExperts; ++idx) {
 
-					// accumulate the total weight
-					totalWeight += expertConsumptionWeights.get(idx);
-				}
-			}
-		}
-		else if(profit < bestProfit) {
-			// the rate will be negative => 
-			// we penalize experts whose predicted price is < currentPrice
-			for (int idx = 0; idx < numExperts; ++idx) {
+                // dock the experts whose price is greater (which means we will get less profit)
+                if(expertConsumptionPrices.get(idx)  < pricePointForBestProfit) {
+                    expertConsumptionWeights.set(idx, expertConsumptionWeights.get(idx)*penaltyFactor);
+                }
 
-				if(expertConsumptionRates.get(idx) * meanMarketPrice < currentPrice) {
-					expertConsumptionWeights.set(idx, expertConsumptionWeights.get(idx)*penaltyFactor);
+                // accumulate suggestedPrice
+                suggestedPrice +=  expertConsumptionWeights.get(idx) * expertConsumptionPrices.get(idx);
+                        
+                // accumulate the total weight
+                totalWeight += expertConsumptionWeights.get(idx);
+            }
 
-					// accumulate suggestedPrice
-					suggestedPrice += expertConsumptionRates.get(idx) * expertConsumptionWeights.get(idx) * meanMarketPrice;
+            // set the bestProfit to be the current profit
+            bestProfit = profit;
 
-					// accumulate the total weight
-					totalWeight += expertConsumptionWeights.get(idx);
-				}
+            // set the current price to be the best one so far
+            pricePointForBestProfit = currentPrice;
 
-			}
+            // scale the suggestd price
+            suggestedPrice /= totalWeight;
 
-		}
-		// scale the suggestd price
-		suggestedPrice /= totalWeight;
-		return suggestedPrice;
-	}
+            log.info("Updating suggested price to " + suggestedPrice + " best price so far: " + pricePointForBestProfit);
+ 
+        }
+        else if(profit < bestProfit) {
 
-	private void improveTariffs() {
+            // dock the experts whose price is smaller (ones that are trying to get us larger profit)
+            // as they are actually not doing so
+            for (int idx = 0; idx < numExperts; ++idx) {
 
-		double currentPrice = 0.0;
-		//double meanMarketPrice = 0.0;
-		double meanMarketPrice = marketManager.getMeanMarketPrice() / 1000.0;
-		double penaltyFactor = 0.9;
+                if(expertConsumptionPrices.get(idx) > pricePointForBestProfit) {
+                    expertConsumptionWeights.set(idx, expertConsumptionWeights.get(idx)*penaltyFactor);
+                }
 
-		ArrayList<TariffSpecification> newSpecifications = new ArrayList<TariffSpecification> ();
+                // accumulate suggestedPrice
+                suggestedPrice += expertConsumptionWeights.get(idx) * expertConsumptionPrices.get(idx);
+                
+                // accumulate the total weight
+                totalWeight += expertConsumptionWeights.get(idx);
+            }
+            
+            // scale the suggestd price
+            suggestedPrice /= totalWeight;
+
+            log.info("profit: " + profit + " < bestProfit: " + bestProfit + ". New suggested price: " + suggestedPrice);
+
+        }
+        
+        return suggestedPrice;
+    }
+
+    private void improveTariffs() {
+
+        double currentPrice = 0.0;
+        //double meanMarketPrice = 0.0;
+        double meanMarketPrice = marketManager.getMeanMarketPrice() / 1000.0;
+        double penaltyFactor = 0.9;
+
+        ArrayList<TariffSpecification> newSpecifications = new ArrayList<TariffSpecification> ();
 		
-		for (TariffSpecification spec :
-			tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker())) {
-			PowerType pt = spec.getPowerType();
+        for (TariffSpecification spec :
+                 tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker())) {
+            PowerType pt = spec.getPowerType();
 
-			// if the current tariff's power type is consumption, we need to 
-			// adjust the rates based on the previous time step's profit and the
-			// best profit
-			if (pt.isConsumption()) {
-				double suggestedPrice = weightedMajority(spec.getRates().get(0).getValue(), meanMarketPrice, penaltyFactor);
+            // if the current tariff's power type is consumption, we need to 
+            // adjust the rates based on the previous time step's profit and the
+            // best profit
+            if (pt.isConsumption()) {
+                double suggestedPrice = weightedMajority(spec.getRates().get(0).getValue(), meanMarketPrice, penaltyFactor);
 				
-				// here, update the tariff and push it out
-				TariffSpecification newSpec =
-					new TariffSpecification(brokerContext.getBroker(),
-					                        PowerType.CONSUMPTION)
-											.withPeriodicPayment(defaultPeriodicPayment * 1.1);
-				newSpec.addRate(new Rate().withValue(suggestedPrice));
-				newSpec.addSupersedes(spec.getId());
+                // here, update the tariff and push it out
+                TariffSpecification newSpec =
+                    new TariffSpecification(brokerContext.getBroker(),
+                                            PowerType.CONSUMPTION)
+                    .withPeriodicPayment(defaultPeriodicPayment * 1.1);
+                newSpec.addRate(new Rate().withValue(suggestedPrice));
+                newSpec.addSupersedes(spec.getId());
 				
-				TariffRevoke revoke = new TariffRevoke(brokerContext.getBroker(), spec);
-				brokerContext.sendMessage(revoke);
+                TariffRevoke revoke = new TariffRevoke(brokerContext.getBroker(), spec);
+                brokerContext.sendMessage(revoke);
 				
-				newSpecifications.add(newSpec);
-			}
-		}
-		for (TariffSpecification spec : newSpecifications) {
-			tariffRepo.addSpecification(spec);
-			brokerContext.sendMessage(spec);
-		}
-	}
+                newSpecifications.add(newSpec);
+            }
+        }
+        for (TariffSpecification spec : newSpecifications) {
+            tariffRepo.addSpecification(spec);
+            brokerContext.sendMessage(spec);
+        }
+    }
 
-	//  // Checks to see whether our tariffs need fine-tuning
-	//  private void improveTariffs()
-	//  {
-	//	  log.info("Cash balance from broker: " + brokerContext.getBroker().getCashBalance());
-	//	  
-	//    // quick magic-number hack to inject a balancing order
-	////    int timeslotIndex = timeslotRepo.currentTimeslot().getSerialNumber();
-	////    if (371 == timeslotIndex) {
-	//      for (TariffSpecification spec :
-	//           tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker())) {
-	////        if (PowerType.INTERRUPTIBLE_CONSUMPTION == spec.getPowerType()) {
-	////          BalancingOrder order = new BalancingOrder(brokerContext.getBroker(),
-	////                                                    spec, 
-	////                                                    0.5,
-	////                                                    spec.getRates().get(0).getMinValue() * 0.9);
-	////          brokerContext.sendMessage(order);
-	////        }
-	////        else if (spec.hasRegulationRate()) {
-	//          // supports both up-regulation and down-regulation
-	////          RegulationRate rr = spec.getRegulationRates().get(0);
-	////          double up = -rr.getUpRegulationPayment();
-	////          double down = -rr.getDownRegulationPayment();
-	////          BalancingOrder bup = new BalancingOrder(brokerContext.getBroker(),
-	////                                                 spec, 1.0, up * 0.5);
-	////          BalancingOrder bdown = new BalancingOrder(brokerContext.getBroker(),
-	////                                                    spec, -1.0, down * 0.9);
-	////          brokerContext.sendMessage(bup);
-	////          brokerContext.sendMessage(bdown);
-	//////        }
-	////      }
-	////    }
-	////    // magic-number hack to supersede a tariff
-	////    if (380 == timeslotIndex) {
-	////      // find the existing CONSUMPTION tariff
-	////      TariffSpecification oldc = null;
-	////      List<TariffSpecification> candidates =
-	////        tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker());
-	////      if (null == candidates || 0 == candidates.size())
-	////        log.error("No tariffs found for broker");
-	////      else {
-	////        // oldc = candidates.get(0);
-	////        for (TariffSpecification candidate: candidates) {
-	////          if (candidate.getPowerType() == PowerType.CONSUMPTION) {
-	////            oldc = candidate;
-	////            break;
-	////          }
-	////        }
-	////        if (null == oldc) {
-	////          log.warn("No CONSUMPTION tariffs found");
-	////        }
-	////        else {
-	////          double rateValue = oldc.getRates().get(0).getValue();
-	////          // create a new CONSUMPTION tariff
-	////          TariffSpecification spec =
-	////            new TariffSpecification(brokerContext.getBroker(),
-	////                                    PowerType.CONSUMPTION)
-	////                .withPeriodicPayment(defaultPeriodicPayment * 1.1);
-	////          Rate rate = new Rate().withValue(rateValue);
-	////          spec.addRate(rate);
-	////          if (null != oldc)
-	////            spec.addSupersedes(oldc.getId());
-	////          //mungId(spec, 6);
-	////          tariffRepo.addSpecification(spec);
-	////          brokerContext.sendMessage(spec);
-	////          // revoke the old one
-	////          TariffRevoke revoke =
-	////            new TariffRevoke(brokerContext.getBroker(), oldc);
-	////          brokerContext.sendMessage(revoke);
-	////        }
-	////      }
-	////    }
-	//
-	//    // Do weighted majority
-	//    //weightedMajority();
-	//
-	//  }
+    //  // Checks to see whether our tariffs need fine-tuning
+    //  private void improveTariffs()
+    //  {
+    //	  log.info("Cash balance from broker: " + brokerContext.getBroker().getCashBalance());
+    //	  
+    //    // quick magic-number hack to inject a balancing order
+    ////    int timeslotIndex = timeslotRepo.currentTimeslot().getSerialNumber();
+    ////    if (371 == timeslotIndex) {
+    //      for (TariffSpecification spec :
+    //           tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker())) {
+    ////        if (PowerType.INTERRUPTIBLE_CONSUMPTION == spec.getPowerType()) {
+    ////          BalancingOrder order = new BalancingOrder(brokerContext.getBroker(),
+    ////                                                    spec, 
+    ////                                                    0.5,
+    ////                                                    spec.getRates().get(0).getMinValue() * 0.9);
+    ////          brokerContext.sendMessage(order);
+    ////        }
+    ////        else if (spec.hasRegulationRate()) {
+    //          // supports both up-regulation and down-regulation
+    ////          RegulationRate rr = spec.getRegulationRates().get(0);
+    ////          double up = -rr.getUpRegulationPayment();
+    ////          double down = -rr.getDownRegulationPayment();
+    ////          BalancingOrder bup = new BalancingOrder(brokerContext.getBroker(),
+    ////                                                 spec, 1.0, up * 0.5);
+    ////          BalancingOrder bdown = new BalancingOrder(brokerContext.getBroker(),
+    ////                                                    spec, -1.0, down * 0.9);
+    ////          brokerContext.sendMessage(bup);
+    ////          brokerContext.sendMessage(bdown);
+    //////        }
+    ////      }
+    ////    }
+    ////    // magic-number hack to supersede a tariff
+    ////    if (380 == timeslotIndex) {
+    ////      // find the existing CONSUMPTION tariff
+    ////      TariffSpecification oldc = null;
+    ////      List<TariffSpecification> candidates =
+    ////        tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker());
+    ////      if (null == candidates || 0 == candidates.size())
+    ////        log.error("No tariffs found for broker");
+    ////      else {
+    ////        // oldc = candidates.get(0);
+    ////        for (TariffSpecification candidate: candidates) {
+    ////          if (candidate.getPowerType() == PowerType.CONSUMPTION) {
+    ////            oldc = candidate;
+    ////            break;
+    ////          }
+    ////        }
+    ////        if (null == oldc) {
+    ////          log.warn("No CONSUMPTION tariffs found");
+    ////        }
+    ////        else {
+    ////          double rateValue = oldc.getRates().get(0).getValue();
+    ////          // create a new CONSUMPTION tariff
+    ////          TariffSpecification spec =
+    ////            new TariffSpecification(brokerContext.getBroker(),
+    ////                                    PowerType.CONSUMPTION)
+    ////                .withPeriodicPayment(defaultPeriodicPayment * 1.1);
+    ////          Rate rate = new Rate().withValue(rateValue);
+    ////          spec.addRate(rate);
+    ////          if (null != oldc)
+    ////            spec.addSupersedes(oldc.getId());
+    ////          //mungId(spec, 6);
+    ////          tariffRepo.addSpecification(spec);
+    ////          brokerContext.sendMessage(spec);
+    ////          // revoke the old one
+    ////          TariffRevoke revoke =
+    ////            new TariffRevoke(brokerContext.getBroker(), oldc);
+    ////          brokerContext.sendMessage(revoke);
+    ////        }
+    ////      }
+    ////    }
+    //
+    //    // Do weighted majority
+    //    //weightedMajority();
+    //
+    //  }
 
-	// ------------- test-support methods ----------------
-	double getUsageForCustomer (CustomerInfo customer,
-			TariffSpecification tariffSpec,
-			int index)
-	{
-		CustomerRecord record = getCustomerRecordByTariff(tariffSpec, customer);
-		return record.getUsage(index);
-	}
+    // ------------- test-support methods ----------------
+    double getUsageForCustomer (CustomerInfo customer,
+                                TariffSpecification tariffSpec,
+                                int index)
+    {
+        CustomerRecord record = getCustomerRecordByTariff(tariffSpec, customer);
+        return record.getUsage(index);
+    }
 
-	// test-support method
-	HashMap<PowerType, double[]> getRawUsageForCustomer (CustomerInfo customer)
-	{
-		HashMap<PowerType, double[]> result = new HashMap<PowerType, double[]>();
-		for (PowerType type : customerProfiles.keySet()) {
-			CustomerRecord record = customerProfiles.get(type).get(customer);
-			if (record != null) {
-				result.put(type, record.usage);
-			}
-		}
-		return result;
-	}
+    // test-support method
+    HashMap<PowerType, double[]> getRawUsageForCustomer (CustomerInfo customer)
+    {
+        HashMap<PowerType, double[]> result = new HashMap<PowerType, double[]>();
+        for (PowerType type : customerProfiles.keySet()) {
+            CustomerRecord record = customerProfiles.get(type).get(customer);
+            if (record != null) {
+                result.put(type, record.usage);
+            }
+        }
+        return result;
+    }
 
-	// test-support method
-	HashMap<String, Integer> getCustomerCounts()
-	{
-		HashMap<String, Integer> result = new HashMap<String, Integer>();
-		for (TariffSpecification spec : customerSubscriptions.keySet()) {
-			HashMap<CustomerInfo, CustomerRecord> customerMap = customerSubscriptions.get(spec);
-			for (CustomerRecord record : customerMap.values()) {
-				result.put(record.customer.getName() + spec.getPowerType(), 
-						record.subscribedPopulation);
-			}
-		}
-		return result;
-	}
+    // test-support method
+    HashMap<String, Integer> getCustomerCounts()
+    {
+        HashMap<String, Integer> result = new HashMap<String, Integer>();
+        for (TariffSpecification spec : customerSubscriptions.keySet()) {
+            HashMap<CustomerInfo, CustomerRecord> customerMap = customerSubscriptions.get(spec);
+            for (CustomerRecord record : customerMap.values()) {
+                result.put(record.customer.getName() + spec.getPowerType(), 
+                           record.subscribedPopulation);
+            }
+        }
+        return result;
+    }
 
-	// code to test id-prefix checking
-	//  private void mungId (TariffSpecification spec, int i)
-	//  {
-	//    long id = spec.getId();
-	//    long baseId =
-	//      id - IdGenerator.extractPrefix(id) * IdGenerator.getMultiplier();
-	//    Field idField = findIdField(spec.getClass());
-	//    try {
-	//      idField.setAccessible(true);
-	//      idField.setLong(spec, baseId + i * IdGenerator.getMultiplier());
-	//    }
-	//    catch (Exception e) {
-	//      log.error(e.toString());
-	//    }
-	//  }
+    // code to test id-prefix checking
+    //  private void mungId (TariffSpecification spec, int i)
+    //  {
+    //    long id = spec.getId();
+    //    long baseId =
+    //      id - IdGenerator.extractPrefix(id) * IdGenerator.getMultiplier();
+    //    Field idField = findIdField(spec.getClass());
+    //    try {
+    //      idField.setAccessible(true);
+    //      idField.setLong(spec, baseId + i * IdGenerator.getMultiplier());
+    //    }
+    //    catch (Exception e) {
+    //      log.error(e.toString());
+    //    }
+    //  }
 
-	// finds a field in superclass hierarchy
-	//  private Field findIdField (Class<?> clazz)
-	//  {
-	//    try {
-	//      Field idField = clazz.getDeclaredField("id");
-	//      return idField;
-	//    }
-	//    catch (NoSuchFieldException e) {
-	//      Class<?> superclass = clazz.getSuperclass();
-	//      if (null == superclass) {
-	//        return null;
-	//      }
-	//      return findIdField(superclass);
-	//    }
-	//    catch (SecurityException e) {
-	//      // Auto-generated catch block
-	//      e.printStackTrace();
-	//      return null;
-	//    }
-	//  }
+    // finds a field in superclass hierarchy
+    //  private Field findIdField (Class<?> clazz)
+    //  {
+    //    try {
+    //      Field idField = clazz.getDeclaredField("id");
+    //      return idField;
+    //    }
+    //    catch (NoSuchFieldException e) {
+    //      Class<?> superclass = clazz.getSuperclass();
+    //      if (null == superclass) {
+    //        return null;
+    //      }
+    //      return findIdField(superclass);
+    //    }
+    //    catch (SecurityException e) {
+    //      // Auto-generated catch block
+    //      e.printStackTrace();
+    //      return null;
+    //    }
+    //  }
 
-	//-------------------- Customer-model recording ---------------------
-	/**
-	 * Keeps track of customer status and usage. Usage is stored
-	 * per-customer-unit, but reported as the product of the per-customer
-	 * quantity and the subscribed population. This allows the broker to use
-	 * historical usage data as the subscribed population shifts.
-	 */
-	class CustomerRecord
-	{
-		CustomerInfo customer;
-		int subscribedPopulation = 0;
-		double[] usage;
-		double alpha = 0.3;
+    //-------------------- Customer-model recording ---------------------
+    /**
+     * Keeps track of customer status and usage. Usage is stored
+     * per-customer-unit, but reported as the product of the per-customer
+     * quantity and the subscribed population. This allows the broker to use
+     * historical usage data as the subscribed population shifts.
+     */
+    class CustomerRecord
+    {
+        CustomerInfo customer;
+        int subscribedPopulation = 0;
+        double[] usage;
+        double alpha = 0.3;
 
-		/**
-		 * Creates an empty record
-		 */
-		CustomerRecord (CustomerInfo customer)
-		{
-			super();
-			this.customer = customer;
-			this.usage = new double[brokerContext.getUsageRecordLength()];
-		}
+        /**
+         * Creates an empty record
+         */
+        CustomerRecord (CustomerInfo customer)
+        {
+            super();
+            this.customer = customer;
+            this.usage = new double[brokerContext.getUsageRecordLength()];
+        }
 
-		CustomerRecord (CustomerRecord oldRecord)
-		{
-			super();
-			this.customer = oldRecord.customer;
-			this.usage = Arrays.copyOf(oldRecord.usage, brokerContext.getUsageRecordLength());
-		}
+        CustomerRecord (CustomerRecord oldRecord)
+        {
+            super();
+            this.customer = oldRecord.customer;
+            this.usage = Arrays.copyOf(oldRecord.usage, brokerContext.getUsageRecordLength());
+        }
 
-		// Returns the CustomerInfo for this record
-		CustomerInfo getCustomerInfo ()
-		{
-			return customer;
-		}
+        // Returns the CustomerInfo for this record
+        CustomerInfo getCustomerInfo ()
+        {
+            return customer;
+        }
 
-		// Adds new individuals to the count
-		void signup (int population)
-		{
-			subscribedPopulation = Math.min(customer.getPopulation(),
-					subscribedPopulation + population);
-		}
+        // Adds new individuals to the count
+        void signup (int population)
+        {
+            subscribedPopulation = Math.min(customer.getPopulation(),
+                                            subscribedPopulation + population);
+        }
 
-		// Removes individuals from the count
-		void withdraw (int population)
-		{
-			subscribedPopulation -= population;
-		}
+        // Removes individuals from the count
+        void withdraw (int population)
+        {
+            subscribedPopulation -= population;
+        }
 
-		// Customer produces or consumes power. We assume the kwh value is negative
-		// for production, positive for consumption
-		void produceConsume (double kwh, Instant when)
-		{
-			int index = getIndex(when);
-			produceConsume(kwh, index);
-		}
+        // Customer produces or consumes power. We assume the kwh value is negative
+        // for production, positive for consumption
+        void produceConsume (double kwh, Instant when)
+        {
+            int index = getIndex(when);
+            produceConsume(kwh, index);
+        }
 
-		// store profile data at the given index
-		void produceConsume (double kwh, int rawIndex)
-		{
-			int index = getIndex(rawIndex);
-			double kwhPerCustomer = 0.0;
-			if (subscribedPopulation > 0) {
-				kwhPerCustomer = kwh / (double)subscribedPopulation;
-			}
-			double oldUsage = usage[index];
-			if (oldUsage == 0.0) {
-				// assume this is the first time
-				usage[index] = kwhPerCustomer;
-			}
-			else {
-				// exponential smoothing
-				usage[index] = alpha * kwhPerCustomer + (1.0 - alpha) * oldUsage;
-			}
-			log.debug("consume " + kwh + " at " + index +
-					", customer " + customer.getName());
-		}
+        // store profile data at the given index
+        void produceConsume (double kwh, int rawIndex)
+        {
+            int index = getIndex(rawIndex);
+            double kwhPerCustomer = 0.0;
+            if (subscribedPopulation > 0) {
+                kwhPerCustomer = kwh / (double)subscribedPopulation;
+            }
+            double oldUsage = usage[index];
+            if (oldUsage == 0.0) {
+                // assume this is the first time
+                usage[index] = kwhPerCustomer;
+            }
+            else {
+                // exponential smoothing
+                usage[index] = alpha * kwhPerCustomer + (1.0 - alpha) * oldUsage;
+            }
+            log.debug("consume " + kwh + " at " + index +
+                      ", customer " + customer.getName());
+        }
 
-		double getUsage (int index)
-		{
-			if (index < 0) {
-				log.warn("usage requested for negative index " + index);
-				index = 0;
-			}
-			return (usage[getIndex(index)] * (double)subscribedPopulation);
-		}
+        double getUsage (int index)
+        {
+            if (index < 0) {
+                log.warn("usage requested for negative index " + index);
+                index = 0;
+            }
+            return (usage[getIndex(index)] * (double)subscribedPopulation);
+        }
 
-		// we assume here that timeslot index always matches the number of
-		// timeslots that have passed since the beginning of the simulation.
-		int getIndex (Instant when)
-		{
-			int result = (int)((when.getMillis() - timeService.getBase()) /
-					(Competition.currentCompetition().getTimeslotDuration()));
-			return result;
-		}
+        // we assume here that timeslot index always matches the number of
+        // timeslots that have passed since the beginning of the simulation.
+        int getIndex (Instant when)
+        {
+            int result = (int)((when.getMillis() - timeService.getBase()) /
+                               (Competition.currentCompetition().getTimeslotDuration()));
+            return result;
+        }
 
-		private int getIndex (int rawIndex)
-		{
-			return rawIndex % usage.length;
-		}
-	}
+        private int getIndex (int rawIndex)
+        {
+            return rawIndex % usage.length;
+        }
+    }
 }
