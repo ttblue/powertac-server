@@ -195,6 +195,7 @@ implements MarketManager, Initializable, Activatable
       }
     }
     meanMarketPrice = totalValue / totalUsage;
+    portfolioManager.setMeanMarketPrice(meanMarketPrice);
   }
 
   /**
@@ -269,19 +270,19 @@ implements MarketManager, Initializable, Activatable
 
     if (Math.abs(estimatedEnergyCosts.get(0)) > 0.0) {
       // This is a positive number
-      portfolioManager.estimatedEnergyCost = Math.abs(estimatedEnergyCosts.get(0));
+      portfolioManager.setEstimatedEnergyCost(Math.abs(estimatedEnergyCosts.get(0)));
       return;
     }
 
     Collections.sort(estimatedEnergyCosts);
-    double first = Math.abs(estimatedEnergyCosts.get(0);
-    double last = Math.abs(estimatedEnergyCosts.get(estimatedEnergyCosts.size() - 1);
+    double first = Math.abs(estimatedEnergyCosts.get(0));
+    double last = Math.abs(estimatedEnergyCosts.get(estimatedEnergyCosts.size() - 1));
     double maxVal = (first > last) ? first : last;
     if ( maxVal != 0 ) {
-      portfolioManager.estimatedEnergyCost = maxVal;
+    	portfolioManager.setEstimatedEnergyCost(maxVal);
     }
     else {
-      portfolioManager.estimatedEnergyCost = meanMarketPrice;
+    	portfolioManager.setEstimatedEnergyCost(meanMarketPrice / 1000.0);
     }
 
   }
