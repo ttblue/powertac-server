@@ -302,14 +302,18 @@ implements MarketManager, Initializable, Activatable
       log.info("no power required in timeslot " + timeslot);
       return 0.0;
     }
-    Double limitPrice = computeLimitPrice(timeslot, neededMWh);
 
+    Double limitPrice = computeLimitPrice(timeslot, neededMWh);
 
     log.info("new order for " + neededMWh + " at " + limitPrice +
              " in timeslot " + timeslot);
     Order order = new Order(broker.getBroker(), timeslot, neededMWh, limitPrice);
     lastOrder.put(timeslot, order);
     broker.sendMessage(order);
+    
+    if (limitPrice == null) 
+      limitPrice = meanMarketPrice;
+
     return limitPrice / neededKWh;
   }
 

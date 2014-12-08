@@ -454,7 +454,9 @@ implements PortfolioManager, Initializable, Activatable
 		
 		totLogWeight = Math.log(totalProductionWeight);
 		for (int i = 0; i < numExperts; i++)
+		{
 			expertProductionWeights.set(i, expertProductionWeights.get(i) - Math.log(totalProductionWeight));
+		}
 			
 	}
 
@@ -489,6 +491,13 @@ implements PortfolioManager, Initializable, Activatable
 		while(price < endPrice) {
 			expertConsumptionPrices.add(price);
 			expertConsumptionWeights.add(Math.log(1.0 / (double) numExperts));
+
+			// These values are just copies of consumption... this is here
+			// just to prevent a runtime error. Change if we're actually going
+			// to implement some functionality for the production tariffs.
+			expertProductionPrices.add(price);
+			expertProductionWeights.add(Math.log(1.0 / (double) numExperts));
+			
 			price += (endPrice - startPrice) / numExperts;
 		}
 
