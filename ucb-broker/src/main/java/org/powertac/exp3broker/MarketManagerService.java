@@ -107,7 +107,7 @@ implements MarketManager, Initializable, Activatable
   }
 
   /* (non-Javadoc)
-   * @see org.powertac.ucbbroker.MarketManager#init(org.powertac.ucbbroker.SampleBroker)
+   * @see org.powertac.ucbbroker.MarketManager#init(org.powertac.ucbbroker.ucbBroker)
    */
 //  @SuppressWarnings("unchecked")
   @Override

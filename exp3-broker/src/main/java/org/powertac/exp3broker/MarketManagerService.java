@@ -107,7 +107,7 @@ implements MarketManager, Initializable, Activatable
   }
 
   /* (non-Javadoc)
-   * @see org.powertac.exp3broker.MarketManager#init(org.powertac.exp3broker.SampleBroker)
+   * @see org.powertac.exp3broker.MarketManager#init(org.powertac.exp3broker.exp3Broker)
    */
 //  @SuppressWarnings("unchecked")
   @Override

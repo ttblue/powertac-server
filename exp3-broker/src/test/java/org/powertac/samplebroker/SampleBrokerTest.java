@@ -40,7 +40,7 @@ import org.springframework.test.util.ReflectionTestUtils;
  * 
  * @author John Collins
  */
-public class SampleBrokerTest
+public class exp3BrokerTest
 {
   private Instant baseTime;
 
@@ -67,16 +67,16 @@ public class SampleBrokerTest
     ReflectionTestUtils.setField(broker, "customerRepo", customerRepo);
     brokerRepo = new BrokerRepo();
     ReflectionTestUtils.setField(broker, "brokerRepo", brokerRepo);
-    ReflectionTestUtils.setField(broker, "username", "Sample");
+    ReflectionTestUtils.setField(broker, "username", "exp3");
 
     broker.init();
   }
   
   /**
-   * Test method for {@link org.powertac.exp3broker.core.PowerTacBroker#SampleBroker(java.lang.String, org.powertac.exp3broker.SampleBrokerService)}.
+   * Test method for {@link org.powertac.exp3broker.core.PowerTacBroker#exp3Broker(java.lang.String, org.powertac.exp3broker.exp3BrokerService)}.
    */
   @Test
-  public void testSampleBroker ()
+  public void testexp3Broker ()
   {
     assertFalse(broker.getBroker().isEnabled());
   }

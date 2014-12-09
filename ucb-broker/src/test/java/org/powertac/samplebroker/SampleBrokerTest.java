@@ -40,7 +40,7 @@ import org.springframework.test.util.ReflectionTestUtils;
  * 
  * @author John Collins
  */
-public class SampleBrokerTest
+public class ucbBrokerTest
 {
   private Instant baseTime;
 
@@ -67,16 +67,16 @@ public class SampleBrokerTest
     ReflectionTestUtils.setField(broker, "customerRepo", customerRepo);
     brokerRepo = new BrokerRepo();
     ReflectionTestUtils.setField(broker, "brokerRepo", brokerRepo);
-    ReflectionTestUtils.setField(broker, "username", "Sample");
+    ReflectionTestUtils.setField(broker, "username", "ucb");
 
     broker.init();
   }
   
   /**
-   * Test method for {@link org.powertac.ucbbroker.core.PowerTacBroker#SampleBroker(java.lang.String, org.powertac.ucbbroker.SampleBrokerService)}.
+   * Test method for {@link org.powertac.ucbbroker.core.PowerTacBroker#ucbBroker(java.lang.String, org.powertac.ucbbroker.ucbBrokerService)}.
    */
   @Test
-  public void testSampleBroker ()
+  public void testucbBroker ()
   {
     assertFalse(broker.getBroker().isEnabled());
   }
