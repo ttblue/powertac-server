@@ -661,8 +661,16 @@ implements PortfolioManager, Initializable, Activatable
 		// double weightedCurrentLoss =  currentLoss / Math.exp(expertConsumptionWeights.get(currentExpert));
 
 		double currentGain = currentProfit.get(tariffSpec);
-		double weightedCurrentGain =  currentGain / currentQWeight;
+		if (currentGain > bestProfit) {
+			bestProfit = currentGain;
+			bestExpert = currentExpert;
+			currentGain = 1;
+		}
+		else {
+			currentGain = (bestProfit - currentGain)/bestProfit;
+		}
 
+		double weightedCurrentGain =  currentGain / currentQWeight;
 		
 		currentProfit.put(tariffSpec, 0.0);
 		
