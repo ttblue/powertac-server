@@ -278,6 +278,7 @@ implements MarketManager, Initializable, Activatable
     double first = Math.abs(estimatedEnergyCosts.get(0));
     double last = Math.abs(estimatedEnergyCosts.get(estimatedEnergyCosts.size() - 1));
     double maxVal = (first > last) ? first : last;
+    // Set the estimated energy cost in $ / kWh
     if ( maxVal != 0 ) {
     	portfolioManager.setEstimatedEnergyCost(maxVal);
     }

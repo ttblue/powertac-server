@@ -131,10 +131,14 @@ implements PortfolioManager, Initializable, Activatable
 
 	// the price at which we got the best profit
 	private double pricePointForBestProfit = 0.0;
+	
 
 	// keep track of timeslot
 	private int firstTimeslot = 0;
 
+	
+	private HashMap<TariffSpecification, Double> currentProfit;
+	
 	public double meanMarketPrice = 0.0;
 	public double estimatedEnergyCost = 0.0;
 
@@ -150,6 +154,8 @@ implements PortfolioManager, Initializable, Activatable
 		expertConsumptionWeights = new ArrayList<Double>();
 		expertProductionWeights = new ArrayList<Double>();
 		expertProductionPrices = new ArrayList<Double>();
+
+		currentProfit = new HashMap<TariffSpecification, Double>();
 	}
 
 	/**
@@ -421,9 +427,10 @@ implements PortfolioManager, Initializable, Activatable
 		if (firstTimeslot == 0) { 
 			firstTimeslot = timeslotIndex;
 		}
-//		else if ((timeslotIndex - firstTimeslot) % 6 != 0) {
-//			return;
-//		}
+		else if ((timeslotIndex - firstTimeslot) % 6 != 0) {
+			waitToPublishTariffs();
+			return;
+		}
 
 		//log.info("Time slot index: " + timeslotIndex);
 		if (customerSubscriptions.size() == 0) {
@@ -436,6 +443,34 @@ implements PortfolioManager, Initializable, Activatable
 			// we have some, are they good enough?
 			log.info("Time slot index after: " + timeslotIndex);
 			improveTariffs(timeslotIndex);
+		}
+	}
+	
+	private void waitToPublishTariffs() {
+		for (TariffSpecification spec :
+			tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker())) {
+//			PowerType pt = spec.getPowerType();
+			
+			HashMap<CustomerInfo, CustomerRecord> customerMap = customerSubscriptions.get(spec);
+			
+			double totalUsage = 0.0;
+			int numSubscribers = 0;
+			
+			for (CustomerRecord cr : customerMap.values())
+			{
+				totalUsage += cr.getUsage(0);
+				numSubscribers += cr.subscribedPopulation;
+			}
+			
+			double totalRevenue = totalUsage*spec.getRates().get(0).getValue();
+			
+			currentProfit.put(spec, currentProfit.get(spec) + totalRevenue - estimatedEnergyCost*totalUsage);
+			
+			System.out.println("Number of subscribers: " + numSubscribers);
+			System.out.println("Total Usage: " + totalUsage + "\nRate" + spec.getRates().get(0).getValue());
+			System.out.println("TotalRevenue: " + totalRevenue + "\nEnergy Cost: " + estimatedEnergyCost*totalUsage + "\nCurrent profit: " + currentProfit.get(spec));
+			
+			return;		
 		}
 	}
 
@@ -516,7 +551,6 @@ implements PortfolioManager, Initializable, Activatable
 			}
 		}
 
-
 		for (PowerType pt : customerProfiles.keySet()) {
 			// we'll just do fixed-rate tariffs for now
 			double rateValue = 0.0;
@@ -525,6 +559,7 @@ implements PortfolioManager, Initializable, Activatable
 			}
 			else {
 				rateValue = -2.0 * expertConsumptionPrices.get(currentExpert);
+				continue;
 			}
 			//      if (pt.isInterruptible()) {
 			//        rateValue *= 0.7; // Magic number!! price break for interruptible
@@ -548,6 +583,7 @@ implements PortfolioManager, Initializable, Activatable
 			spec.addRate(rate);
 			customerSubscriptions.put(spec, new HashMap<CustomerInfo, CustomerRecord>());
 			tariffRepo.addSpecification(spec);
+			currentProfit.put(spec, 0.0);
 			brokerContext.sendMessage(spec);
 			break;
 		}
@@ -622,22 +658,15 @@ implements PortfolioManager, Initializable, Activatable
 	
 	private void EXP3(TariffSpecification tariffSpec, int t) {
 		
-		HashMap<CustomerInfo, CustomerRecord> customerMap = customerSubscriptions.get(tariffSpec);
+		double weightedcurrentProfit = -currentProfit.get(tariffSpec) / Math.exp(expertConsumptionWeights.get(currentExpert));
 		
-		double totalUsage = 0.0;
-		for (CustomerRecord cr : customerMap.values())
-			totalUsage += cr.getUsage(0);
-		
-		double totalRevenue = totalUsage*tariffSpec.getRates().get(0).getValue();
-		double currentLoss = totalRevenue - estimatedEnergyCost;
-		
-		double weightedCurrentLoss = currentLoss / Math.exp(expertConsumptionWeights.get(currentExpert));
+		currentProfit.put(tariffSpec, 0.0);
 		
 		double epsilon = Math.sqrt(2*Math.log(numExperts)/(numExperts*t));
-		expertConsumptionWeights.set(currentExpert, expertConsumptionWeights.get(currentExpert) - epsilon*weightedCurrentLoss);
+		expertConsumptionWeights.set(currentExpert, expertConsumptionWeights.get(currentExpert) - epsilon*weightedcurrentProfit);
 		
 //		ArrayList<Double> loss = new ArrayList<Double> (Collections.nCopies(numExperts, 0.0));
-//		loss.set(currentExpert, currentLoss);
+//		loss.set(currentExpert, currentProfit);
 	}
 
 
@@ -650,20 +679,24 @@ implements PortfolioManager, Initializable, Activatable
 
 		ArrayList<TariffSpecification> newSpecifications = new ArrayList<TariffSpecification> ();
 
+		System.out.println("****** SIZE: " + tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker()).size() );
+		int idx=0;
 		for (TariffSpecification spec :
 			tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker())) {
 			PowerType pt = spec.getPowerType();
-
 			// if the current tariff's power type is consumption, we need to 
 			// adjust the rates based on the previous time step's profit and the
 			// best profit
 			if (pt.isConsumption()) {
+				System.out.println("*** NEXT SPEC ***" + idx++);
 				//double suggestedPrice = weightedMajority(spec.getRates().get(0).getValue(), marketPrice, penaltyFactor);
 				EXP3(spec, timeSlotIndex - firstTimeslot);
 				renormalizeWeights();
 				currentExpert = drawFromDistribution(expertConsumptionWeights);
 				double suggestedPrice = expertConsumptionPrices.get(currentExpert);
-
+				System.out.println("Current expert: " + currentExpert);
+				System.out.println("Suggested price: " + suggestedPrice);
+				
 				// here, update the tariff and push it out
 				TariffSpecification newSpec =
 						new TariffSpecification(brokerContext.getBroker(),
@@ -674,13 +707,17 @@ implements PortfolioManager, Initializable, Activatable
 
 				TariffRevoke revoke = new TariffRevoke(brokerContext.getBroker(), spec);
 				brokerContext.sendMessage(revoke);
-
+				
+				tariffRepo.removeSpecification(spec.getId());
+				currentProfit.remove(spec);
+				
 				newSpecifications.add(newSpec);
 			}
 		}
 		for (TariffSpecification spec : newSpecifications) {
 			tariffRepo.addSpecification(spec);
 			brokerContext.sendMessage(spec);
+			currentProfit.put(spec, 0.0);
 		}
 	}
 
