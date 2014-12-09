@@ -139,7 +139,11 @@ implements PortfolioManager, Initializable, Activatable
 	// current cash balance and last profit
 	private double cash = 0.0;
 	private double profit = 0.0;
-	private double bestProfit = 0.0;
+	private double bestProfit = 1.0;
+	private double worstLoss = -1.0;
+	
+	// Probability of randomly exploring
+	private double gamma = 0.9;
 
 	// the price at which we got the best profit
 	private double pricePointForBestProfit = 0.0;
@@ -452,12 +456,17 @@ implements PortfolioManager, Initializable, Activatable
 		if (customerSubscriptions.size() == 0) {
 			// we (most likely) have no tariffs
 			log.info("Time slot index first: " + timeslotIndex);
-			log.info("ABCDEF");
 			createInitialTariffs();
 		}
-		else {
+		else if ((timeslotIndex - firstTimeslot) > 0){
+			
+			if (gamma > 0.5) {
+				gamma = 0.9 - (timeslotIndex - firstTimeslot)*0.4/5/6;
+			}
+			
 			// we have some, are they good enough?
 			log.info("Time slot index after: " + timeslotIndex);
+			waitToPublishTariffs();
 			improveTariffs(timeslotIndex);
 		}
 	}
@@ -473,6 +482,8 @@ implements PortfolioManager, Initializable, Activatable
 		double startPrice = (1 + upperBound) * marketPrice;
 		double endPrice = (1 - lowerBound) * marketPrice;
 		double price = startPrice;
+		
+		double initPrice = (1 + upperBound/2) * marketPrice;
 
 		while(price < endPrice) {
 			// Initialize consumption variables
@@ -497,7 +508,7 @@ implements PortfolioManager, Initializable, Activatable
 
 		currentExpert = numExperts;
 		for (int i=0; i < numExperts; i ++) {
-			if (marketPrice >= expertConsumptionPrices.get(i) && marketPrice < expertConsumptionPrices.get(i+1)) {
+			if (startPrice >= expertConsumptionPrices.get(i) && startPrice < expertConsumptionPrices.get(i+1)) {
 				currentExpert = i;
 				bestExpert = i;
 				break;
@@ -532,9 +543,9 @@ implements PortfolioManager, Initializable, Activatable
 
 			// }
 
-			for (int i = 0; i < numExperts; i ++) {
-				System.out.println("Expert " + i + ": " + expertConsumptionWeights.get(i));
-			}
+//			for (int i = 0; i < numExperts; i ++) {
+//				System.out.println("Expert " + i + ": " + expertConsumptionWeights.get(i));
+//			}
 
 			spec.addRate(rate);
 			customerSubscriptions.put(spec, new HashMap<CustomerInfo, CustomerRecord>());
@@ -552,28 +563,28 @@ implements PortfolioManager, Initializable, Activatable
 			
 
 			// Method 1: Estimate profit from subscription and market manager data 
-			HashMap<CustomerInfo, CustomerRecord> customerMap = customerSubscriptions.get(spec);
-			
-			double totalUsage = 0.0;
-			int numSubscribers = 0;
-			
-			for (CustomerRecord cr : customerMap.values())
-			{
-				totalUsage += cr.getUsage(0);
-				numSubscribers += cr.subscribedPopulation;
-			}
-			
-			double totalRevenue = totalUsage*spec.getRates().get(0).getValue();
-			
-			currentProfit.put(spec, currentProfit.get(spec) + totalRevenue - estimatedEnergyCost*totalUsage);
-			
-			System.out.println("Number of subscribers: " + numSubscribers);
-			System.out.println("Total Usage: " + totalUsage + "\nRate" + spec.getRates().get(0).getValue());
-			System.out.println("TotalRevenue: " + totalRevenue + "\nEnergy Cost: " + estimatedEnergyCost*totalUsage + "\nCurrent profit: " + currentProfit.get(spec));
+//			HashMap<CustomerInfo, CustomerRecord> customerMap = customerSubscriptions.get(spec);
+//			
+//			double totalUsage = 0.0;
+//			int numSubscribers = 0;
+//			
+//			for (CustomerRecord cr : customerMap.values())
+//			{
+//				totalUsage += cr.getUsage(0);
+//				numSubscribers += cr.subscribedPopulation;
+//			}
+//			
+//			double totalRevenue = totalUsage*spec.getRates().get(0).getValue();
+//			
+//			currentProfit.put(spec, currentProfit.get(spec) + totalRevenue - estimatedEnergyCost*totalUsage);
+//			
+//			System.out.println("Number of subscribers: " + numSubscribers);
+//			System.out.println("Total Usage: " + totalUsage + "\nRate" + spec.getRates().get(0).getValue());
+//			System.out.println("Total Revenue: " + totalRevenue + "\nEnergy Cost: " + estimatedEnergyCost*totalUsage + "\nCurrent profit: " + currentProfit.get(spec));
 			
 
 			// Method 2: If we're only using one tariff, we can just use our cash position
-			// currentProfit.put(spec, currentProfit.get(spec) + profit);
+			currentProfit.put(spec, currentProfit.get(spec) + profit);
 
 			return;		
 		}
@@ -582,15 +593,15 @@ implements PortfolioManager, Initializable, Activatable
 	private void renormalizeWeights () {
 		double totalConsumptionWeight = 0.0;
 		for (double w : expertConsumptionWeights) {
-			System.out.println("Log Weight: " + w + " Weight: " + Math.exp(w));
+//			System.out.println("Log Weight: " + w + " Weight: " + Math.exp(w));
 			totalConsumptionWeight += Math.exp(w);
-			System.out.println("Total so far: " + totalConsumptionWeight);
+//			System.out.println("Total so far: " + totalConsumptionWeight);
 		}
 		
 		double totLogWeight = Math.log(totalConsumptionWeight);
 		for (int i = 0; i < numExperts; i++) {
-			System.out.println("TotalConsumptionWeight: " +  totalConsumptionWeight + " TotalLogWeight: " + totLogWeight);
-			System.out.println("Set Consumption Weight : " + i + " to: " +  (expertConsumptionWeights.get(i) - totLogWeight) );
+//			System.out.println("TotalConsumptionWeight: " +  totalConsumptionWeight + " TotalLogWeight: " + totLogWeight);
+//			System.out.println("Set Consumption Weight : " + i + " to: " +  (expertConsumptionWeights.get(i) - totLogWeight) );
 			expertConsumptionWeights.set(i, expertConsumptionWeights.get(i) - totLogWeight);
 		}
 		
@@ -602,42 +613,78 @@ implements PortfolioManager, Initializable, Activatable
 		totLogWeight = Math.log(totalProductionWeight);
 		for (int i = 0; i < numExperts; i++)
 		{
-			expertProductionWeights.set(i, expertProductionWeights.get(i) - Math.log(totalProductionWeight));
+			expertProductionWeights.set(i, expertProductionWeights.get(i) - totLogWeight);
 		}
 			
 	}
 
+//	public Pair<Integer, Double> drawFromQDistribution (ArrayList<Double> logWeights, double gamma) {
+//
+//		ArrayList<Double> cdf = new ArrayList<Double> ();
+//		
+//		cdf.add(0.0);
+//		for (double w : logWeights) {
+//			System.out.println("Weight: " + Math.exp(w) + " LogWeight: " + w);
+////			System.out.println("CDF: " + (cdf.get(cdf.size()-1) + Math.exp(w)));
+//			cdf.add(cdf.get(cdf.size()-1) + Math.exp(w));
+//		}
+//
+//		int n = cdf.size()-1;
+//		double sum_wts = cdf.get(n);
+//		ArrayList<Double> smoothed_cdf = new ArrayList<Double> (n+1);
+//
+//		smoothed_cdf.add(0.0);
+//		for (int i=1; i < n+1; i ++) {
+////			System.out.println("Smoothed CDF: " + (cdf.get(i)*(1-gamma)/sum_wts + gamma/n));
+//			smoothed_cdf.add(cdf.get(i)*(1-gamma)/sum_wts + gamma/n);
+//		}
+//
+//		double r = Math.random();
+//
+//		for (int i=0; i < n; i ++) {
+//			if (r >= smoothed_cdf.get(i) && r < smoothed_cdf.get(i+1))
+//				return new Pair<Integer, Double>(i, smoothed_cdf.get(i+1) - smoothed_cdf.get(i));
+//		}
+//
+//		return new Pair<Integer, Double>(n-1, smoothed_cdf.get(n) - smoothed_cdf.get(n-1));
+//	}
+	
 	public Pair<Integer, Double> drawFromQDistribution (ArrayList<Double> logWeights, double gamma) {
 
-		ArrayList<Double> cdf = new ArrayList<Double> ();
+		ArrayList<Double> pdf = new ArrayList<Double> ();
 		
-		cdf.add(0.0);
+		double sum_wts = 0.0;
 		for (double w : logWeights) {
-			System.out.println("Weight: " + w + " LogWeight: " + Math.exp(w));
-			System.out.println("CDF: " + (cdf.get(cdf.size()-1) + Math.exp(w)));
-			cdf.add(cdf.get(cdf.size()-1) + Math.exp(w));
+			//System.out.println("Weight: " + Math.exp(w) + " LogWeight: " + w);
+//			System.out.println("CDF: " + (cdf.get(cdf.size()-1) + Math.exp(w)));
+			pdf.add(Math.exp(w));
+			sum_wts += Math.exp(w);
 		}
+		System.out.println("Sum weights: " + sum_wts);
 
-		int n = cdf.size()-1;
-		double sum_wts = cdf.get(n);
-		ArrayList<Double> smoothed_cdf = new ArrayList<Double> (n+1);
+		int n = pdf.size();
+		
+		ArrayList<Double> cdf = new ArrayList<Double> ();
 
-		smoothed_cdf.add(0.0);
+		cdf.add(0.0);
 		for (int i=1; i < n+1; i ++) {
-			System.out.println("Smoothed CDF: " + (cdf.get(i)*(1-gamma)/sum_wts + gamma/n));
-			smoothed_cdf.add(cdf.get(i)*(1-gamma)/sum_wts + gamma/n);
+//			System.out.println("Smoothed CDF: " + (cdf.get(i)*(1-gamma)/sum_wts + gamma/n));
+			cdf.add(cdf.get(i-1) + (1-gamma)*(pdf.get(i-1)/sum_wts) + gamma*(1 / (double) n));
 		}
 
 		double r = Math.random();
 
 		for (int i=0; i < n; i ++) {
-			if (r >= smoothed_cdf.get(i) && r < smoothed_cdf.get(i+1))
-				return new Pair<Integer, Double>(i, smoothed_cdf.get(i+1) - smoothed_cdf.get(i));
+			if (r >= cdf.get(i) && r < cdf.get(i+1)) {
+				System.out.println("P weight: " + pdf.get(i)/sum_wts);
+				return new Pair<Integer, Double>(i, cdf.get(i+1) - cdf.get(i));
+			}
 		}
-
-		return new Pair<Integer, Double>(n-1, smoothed_cdf.get(n) - smoothed_cdf.get(n-1));
+		System.out.println("P weight: " + pdf.get(n-1)/sum_wts);
+		return new Pair<Integer, Double>(n-1, cdf.get(n) - cdf.get(n-1));
 	}
 
+	
 	public int drawFromDistribution (ArrayList<Double> logWeights) {
 
 		ArrayList<Double> cdf = new ArrayList<Double> ();
@@ -661,21 +708,27 @@ implements PortfolioManager, Initializable, Activatable
 		// double weightedCurrentLoss =  currentLoss / Math.exp(expertConsumptionWeights.get(currentExpert));
 
 		double currentGain = currentProfit.get(tariffSpec);
-		if (currentGain > bestProfit) {
+		System.out.println("Current profit:" + currentGain);
+		if (currentGain < worstLoss) {
+			worstLoss = currentGain;
+			currentGain = -1.0;
+		} 
+		else if (currentGain < 0) {
+			currentGain = -1.0 - (worstLoss - currentGain)/worstLoss;
+		}
+		else if (currentGain > bestProfit) {
 			bestProfit = currentGain;
 			bestExpert = currentExpert;
-			currentGain = 1;
+			currentGain = 1.0;
 		}
-		else {
-			currentGain = (bestProfit - currentGain)/bestProfit;
-		}
+		else currentGain = 1.0 - (bestProfit - currentGain)/bestProfit;
 
 		double weightedCurrentGain =  currentGain / currentQWeight;
 		
 		currentProfit.put(tariffSpec, 0.0);
 		
 		double epsilon = Math.sqrt(2*Math.log(numExperts)/(numExperts*t));
-		System.out.println("CurrentGain: " + currentGain + " weightedCurrentGain: " + weightedCurrentGain + " Epsilon: " + epsilon);
+		System.out.println("Current Gain: " + currentGain + " weightedCurrentGain: " + weightedCurrentGain + " Epsilon: " + epsilon);
 		// TODO: not sure about this
 		expertConsumptionWeights.set(currentExpert, expertConsumptionWeights.get(currentExpert) + epsilon*weightedCurrentGain);
 	}
@@ -707,7 +760,7 @@ implements PortfolioManager, Initializable, Activatable
 
 		ArrayList<TariffSpecification> newSpecifications = new ArrayList<TariffSpecification> ();
 
-		System.out.println("****** SIZE: " + tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker()).size() );
+		//System.out.println("****** SIZE: " + tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker()).size() );
 
 		int idx=0;
 		for (TariffSpecification spec :
@@ -717,26 +770,27 @@ implements PortfolioManager, Initializable, Activatable
 			// adjust the rates based on the previous time step's profit and the
 			// best profit
 			if (pt.isConsumption()) {
-				System.out.println("*** NEXT SPEC ***" + idx++);
+				//System.out.println("*** NEXT SPEC ***" + idx++);
 
 				// double loss = calculateLoss();
 				exp3(spec, timeSlotIndex - firstTimeslot);
 				renormalizeWeights();
 
+				System.out.println("**********************");
 				// Updated EXP3 for gain rather than loss
-				double gamma = 0.5;
 				Pair<Integer, Double> sample = drawFromQDistribution(expertConsumptionWeights, gamma);
 				currentExpert = sample.getValue0();
 				currentQWeight = sample.getValue1();
 
 				double suggestedPrice = expertConsumptionPrices.get(currentExpert);
 				System.out.println("Current expert: " + currentExpert);
-				System.out.println("Current expert Qweight: " + currentQWeight + " Current expert weight: " + expertConsumptionWeights.get(currentExpert));
+				System.out.println("Qweight: " + currentQWeight);// + "\nCurrent expert weight: " + expertConsumptionWeights.get(currentExpert));
+				System.out.println("Gamma: " + gamma);
 				// System.out.println("Suggested price: " + suggestedPrice);
 
-				for (int i = 0; i < numExperts; i ++) {
-					System.out.println("Expert " + i + ": " + expertConsumptionWeights.get(i));
-				}
+//				for (int i = 0; i < numExperts; i ++) {
+//					System.out.println("Expert " + i + ": " + expertConsumptionWeights.get(i));
+//				}
 				
 				// Update the tariff and push it out
 				TariffSpecification newSpec =
