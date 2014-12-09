@@ -699,9 +699,9 @@ implements PortfolioManager, Initializable, Activatable
 
 				System.out.println("**********************");
 				// Updated EXP3 for gain rather than loss
-				Pair<Integer, Double> exp3 = drawFromQDistribution(expertConsumptionWeights, gamma);
-				currentExpert = exp3.getValue0();
-				currentQWeight = exp3.getValue1();
+				Pair<Integer, Double> sample = drawFromQDistribution(expertConsumptionWeights, gamma);
+				currentExpert = sample.getValue0();
+				currentQWeight = sample.getValue1();
 
 				double suggestedPrice = expertConsumptionPrices.get(currentExpert);
 				System.out.println("Current expert: " + currentExpert);

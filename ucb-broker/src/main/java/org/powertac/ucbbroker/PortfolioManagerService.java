@@ -127,6 +127,8 @@ implements PortfolioManager, Initializable, Activatable
 	// Consumption variables
 	private ArrayList<Double> expertConsumptionWeights;
 	private ArrayList<Double> expertConsumptionPrices;
+	private HashMap<TariffSpecification, ArrayList<Integer>> consumptionNumTrials;
+
 
 	// Production variables
 	private ArrayList<Double> expertProductionWeights;
@@ -166,7 +168,8 @@ implements PortfolioManager, Initializable, Activatable
 		expertProductionWeights 	= new ArrayList<Double>();
 		expertProductionPrices 		= new ArrayList<Double>();
 
-		currentProfit = new HashMap<TariffSpecification, Double>();
+		currentProfit 				= new HashMap<TariffSpecification, Double>();
+		consumptionNumTrials 		= new HashMap<TariffSpecification, ArrayList<Integer>>();
 	}
 
 	/**
@@ -300,8 +303,6 @@ implements PortfolioManager, Initializable, Activatable
 		cash += profit;
 		log.info("Cash position: " + cash);
 		log.info("Profit: " + profit);
-
-		// cannot update bestProfit here - it should be updated in improveTariffs method
 	}
 
 	/**
@@ -699,9 +700,9 @@ implements PortfolioManager, Initializable, Activatable
 
 				System.out.println("**********************");
 				// Updated EXP3 for gain rather than loss
-				Pair<Integer, Double> ucb = drawFromQDistribution(expertConsumptionWeights, gamma);
-				currentExpert = ucb.getValue0();
-				currentQWeight = ucb.getValue1();
+				Pair<Integer, Double> sample = drawFromQDistribution(expertConsumptionWeights, gamma);
+				currentExpert = sample.getValue0();
+				currentQWeight = sample.getValue1();
 
 				double suggestedPrice = expertConsumptionPrices.get(currentExpert);
 				System.out.println("Current expert: " + currentExpert);
