@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.powertac.samplebroker;
+package org.powertac.ucbbroker;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -45,12 +45,12 @@ import org.powertac.common.msg.TariffStatus;
 import org.powertac.common.repo.CustomerRepo;
 import org.powertac.common.repo.TariffRepo;
 import org.powertac.common.repo.TimeslotRepo;
-import org.powertac.samplebroker.core.BrokerPropertiesService;
-import org.powertac.samplebroker.interfaces.Activatable;
-import org.powertac.samplebroker.interfaces.BrokerContext;
-import org.powertac.samplebroker.interfaces.Initializable;
-import org.powertac.samplebroker.interfaces.MarketManager;
-import org.powertac.samplebroker.interfaces.PortfolioManager;
+import org.powertac.ucbbroker.core.BrokerPropertiesService;
+import org.powertac.ucbbroker.interfaces.Activatable;
+import org.powertac.ucbbroker.interfaces.BrokerContext;
+import org.powertac.ucbbroker.interfaces.Initializable;
+import org.powertac.ucbbroker.interfaces.MarketManager;
+import org.powertac.ucbbroker.interfaces.PortfolioManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -644,7 +644,7 @@ implements PortfolioManager, Initializable, Activatable
 
 	}
 
-	private void exp3(TariffSpecification tariffSpec, int t) {
+	private void ucb(TariffSpecification tariffSpec, int t) {
 
 		double currentGain = currentProfit.get(tariffSpec);
 		System.out.println("Current profit:" + currentGain);
@@ -694,14 +694,14 @@ implements PortfolioManager, Initializable, Activatable
 				//System.out.println("*** NEXT SPEC ***" + idx++);
 
 				// double loss = calculateLoss();
-				exp3(spec, timeSlotIndex - firstTimeslot);
+				ucb(spec, timeSlotIndex - firstTimeslot);
 				renormalizeWeights();
 
 				System.out.println("**********************");
 				// Updated EXP3 for gain rather than loss
-				Pair<Integer, Double> sample = drawFromQDistribution(expertConsumptionWeights, gamma);
-				currentExpert = sample.getValue0();
-				currentQWeight = sample.getValue1();
+				Pair<Integer, Double> ucb = drawFromQDistribution(expertConsumptionWeights, gamma);
+				currentExpert = ucb.getValue0();
+				currentQWeight = ucb.getValue1();
 
 				double suggestedPrice = expertConsumptionPrices.get(currentExpert);
 				System.out.println("Current expert: " + currentExpert);

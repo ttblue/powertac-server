@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.powertac.samplebroker;
+package org.powertac.exp3broker;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -45,12 +45,12 @@ import org.powertac.common.msg.TariffStatus;
 import org.powertac.common.repo.CustomerRepo;
 import org.powertac.common.repo.TariffRepo;
 import org.powertac.common.repo.TimeslotRepo;
-import org.powertac.samplebroker.core.BrokerPropertiesService;
-import org.powertac.samplebroker.interfaces.Activatable;
-import org.powertac.samplebroker.interfaces.BrokerContext;
-import org.powertac.samplebroker.interfaces.Initializable;
-import org.powertac.samplebroker.interfaces.MarketManager;
-import org.powertac.samplebroker.interfaces.PortfolioManager;
+import org.powertac.exp3broker.core.BrokerPropertiesService;
+import org.powertac.exp3broker.interfaces.Activatable;
+import org.powertac.exp3broker.interfaces.BrokerContext;
+import org.powertac.exp3broker.interfaces.Initializable;
+import org.powertac.exp3broker.interfaces.MarketManager;
+import org.powertac.exp3broker.interfaces.PortfolioManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -699,9 +699,9 @@ implements PortfolioManager, Initializable, Activatable
 
 				System.out.println("**********************");
 				// Updated EXP3 for gain rather than loss
-				Pair<Integer, Double> sample = drawFromQDistribution(expertConsumptionWeights, gamma);
-				currentExpert = sample.getValue0();
-				currentQWeight = sample.getValue1();
+				Pair<Integer, Double> exp3 = drawFromQDistribution(expertConsumptionWeights, gamma);
+				currentExpert = exp3.getValue0();
+				currentQWeight = exp3.getValue1();
 
 				double suggestedPrice = expertConsumptionPrices.get(currentExpert);
 				System.out.println("Current expert: " + currentExpert);
