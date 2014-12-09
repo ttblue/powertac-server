@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.lang.Math;
+import org.javatuples.Pair;
 
 import org.apache.log4j.Logger;
 import org.joda.time.Instant;
@@ -117,12 +118,23 @@ implements PortfolioManager, Initializable, Activatable
 			description = "Default daily meter charge")
 	private double defaultPeriodicPayment = -1.0;
 
+	// Expert variables
 	private int numExperts = 100;
+	private int bestExpert = 0;
+	private int currentExpert = 0;
+	private double currentQWeight = 1.0/numExperts;
+
+	// Consumption variables
 	private ArrayList<Double> expertConsumptionWeights;
 	private ArrayList<Double> expertConsumptionPrices;
+	// private HashMap<TariffSpecification, ArrayList<Double>> expertConsumptionAvgProfits;
+	// private HashMap<TariffSpecification, ArrayList<Integer>> expertConsumptionNumTrials;
+
+	// Production variables
 	private ArrayList<Double> expertProductionWeights;
 	private ArrayList<Double> expertProductionPrices;
-	private int currentExpert = 0;
+	// private HashMap<TariffSpecification, ArrayList<Double>> expertProductionAvgProfits;
+	// private HashMap<TariffSpecification, ArrayList<Integer>> expertProductionNumTrials;
 
 	// current cash balance and last profit
 	private double cash = 0.0;
@@ -135,7 +147,6 @@ implements PortfolioManager, Initializable, Activatable
 
 	// keep track of timeslot
 	private int firstTimeslot = 0;
-
 	
 	private HashMap<TariffSpecification, Double> currentProfit;
 	
@@ -150,11 +161,16 @@ implements PortfolioManager, Initializable, Activatable
 	{
 		super();
 
-		expertConsumptionPrices = new ArrayList<Double>();
-		expertConsumptionWeights = new ArrayList<Double>();
-		expertProductionWeights = new ArrayList<Double>();
-		expertProductionPrices = new ArrayList<Double>();
+		expertConsumptionPrices 	= new ArrayList<Double>();
+		expertConsumptionWeights 	= new ArrayList<Double>();
+		// expertConsumptionAvgProfits = new HashMap<TariffSpecification, ArrayList<Double>>();
+		// expertConsumptionNumTrials	= new HashMap<TariffSpecification, ArrayList<Integer>>();
 
+		expertProductionWeights 	= new ArrayList<Double>();
+		expertProductionPrices 		= new ArrayList<Double>();
+		// expertProductionAvgProfits 	= new HashMap<TariffSpecification, ArrayList<Double>>();
+		// expertProductionNumTrials 	= new HashMap<TariffSpecification, ArrayList<Integer>>();
+		
 		currentProfit = new HashMap<TariffSpecification, Double>();
 	}
 
@@ -446,72 +462,6 @@ implements PortfolioManager, Initializable, Activatable
 		}
 	}
 	
-	private void waitToPublishTariffs() {
-		for (TariffSpecification spec :
-			tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker())) {
-//			PowerType pt = spec.getPowerType();
-			
-			HashMap<CustomerInfo, CustomerRecord> customerMap = customerSubscriptions.get(spec);
-			
-			double totalUsage = 0.0;
-			int numSubscribers = 0;
-			
-			for (CustomerRecord cr : customerMap.values())
-			{
-				totalUsage += cr.getUsage(0);
-				numSubscribers += cr.subscribedPopulation;
-			}
-			
-			double totalRevenue = totalUsage*spec.getRates().get(0).getValue();
-			
-			currentProfit.put(spec, currentProfit.get(spec) + totalRevenue - estimatedEnergyCost*totalUsage);
-			
-			System.out.println("Number of subscribers: " + numSubscribers);
-			System.out.println("Total Usage: " + totalUsage + "\nRate" + spec.getRates().get(0).getValue());
-			System.out.println("TotalRevenue: " + totalRevenue + "\nEnergy Cost: " + estimatedEnergyCost*totalUsage + "\nCurrent profit: " + currentProfit.get(spec));
-			
-			return;		
-		}
-	}
-
-	private void renormalizeWeights () {
-		double totalConsumptionWeight = 0.0;
-		for (double w : expertConsumptionWeights)
-			totalConsumptionWeight += Math.exp(w);
-		
-		double totLogWeight = Math.log(totalConsumptionWeight);
-		for (int i = 0; i < numExperts; i++)
-			expertConsumptionWeights.set(i, expertConsumptionWeights.get(i) - totLogWeight);
-		
-		double totalProductionWeight = 0.0;
-		for (double w : expertProductionWeights)
-			totalProductionWeight += Math.exp(w);
-		
-		totLogWeight = Math.log(totalProductionWeight);
-		for (int i = 0; i < numExperts; i++)
-		{
-			expertProductionWeights.set(i, expertProductionWeights.get(i) - Math.log(totalProductionWeight));
-		}
-			
-	}
-
-	public int drawFromDistribution (ArrayList<Double> logWeights) {
-
-		ArrayList<Double> cdf = new ArrayList<Double> ();
-		cdf.add(0.0);
-		for (double w : logWeights)
-			cdf.add(cdf.get(cdf.size()-1) + Math.exp(w));
-
-		double r = Math.random()*cdf.get(cdf.size()-1);
-
-		for (int i=0; i < cdf.size() - 1; i ++) {
-			if (r >= cdf.get(i) && r < cdf.get(i+1))
-				return i;
-		}
-		return logWeights.size() - 1;
-
-	}
-
 	// Creates initial tariffs for the main power types. These are simple
 	// fixed-rate two-part tariffs that give the broker a fixed margin.
 	private void createInitialTariffs ()
@@ -523,15 +473,17 @@ implements PortfolioManager, Initializable, Activatable
 		double startPrice = (1 + upperBound) * marketPrice;
 		double endPrice = (1 - lowerBound) * marketPrice;
 		double price = startPrice;
+
 		while(price < endPrice) {
+			// Initialize consumption variables
 			expertConsumptionPrices.add(price);
 			expertConsumptionWeights.add(Math.log(1.0 / (double) numExperts));
+			// expertConsumptionAvgProfits.add(0.0);
 
-			// These values are just copies of consumption... this is here
-			// just to prevent a runtime error. Change if we're actually going
-			// to implement some functionality for the production tariffs.
+			// Initialize production variables
 			expertProductionPrices.add(price);
 			expertProductionWeights.add(Math.log(1.0 / (double) numExperts));
+			// expertProductionAvgProfits.add(0.0);
 			
 			price += (endPrice - startPrice) / numExperts;
 		}
@@ -547,6 +499,7 @@ implements PortfolioManager, Initializable, Activatable
 		for (int i=0; i < numExperts; i ++) {
 			if (marketPrice >= expertConsumptionPrices.get(i) && marketPrice < expertConsumptionPrices.get(i+1)) {
 				currentExpert = i;
+				bestExpert = i;
 				break;
 			}
 		}
@@ -569,17 +522,20 @@ implements PortfolioManager, Initializable, Activatable
 					new TariffSpecification(brokerContext.getBroker(), pt)
 			.withPeriodicPayment(defaultPeriodicPayment);
 			Rate rate = new Rate().withValue(rateValue);
-			//      if (pt.isInterruptible()) {
-			//        // set max curtailment
-			//        rate.withMaxCurtailment(0.1);
-			//      }
-			//      if (pt.isStorage()) {
-			//        // add a RegulationRate
-			//        RegulationRate rr = new RegulationRate();
-			//        rr.withUpRegulationPayment(-rateValue * 0.5)
-			//            .withDownRegulationPayment(rateValue * 0.5); // magic numbers
-			//        spec.addRate(rr);
-			//      }
+
+			// for (int i = 0; i < numExperts; i++) {
+			// 	// Consumption
+			// 	expertConsumptionAvgProfits.get(spec).add(0.0);
+			// 	expertConsumptionNumTrials.get(spec).add(0);
+			// 	expertProductionAvgProfits.get(spec).add(0.0);
+			// 	expertProductionNumTrials.get(spec).add(0);
+
+			// }
+
+			for (int i = 0; i < numExperts; i ++) {
+				System.out.println("Expert " + i + ": " + expertConsumptionWeights.get(i));
+			}
+
 			spec.addRate(rate);
 			customerSubscriptions.put(spec, new HashMap<CustomerInfo, CustomerRecord>());
 			tariffRepo.addSpecification(spec);
@@ -588,98 +544,163 @@ implements PortfolioManager, Initializable, Activatable
 			break;
 		}
 	}
+	
+	private void waitToPublishTariffs() {
+		for (TariffSpecification spec :
+			tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker())) {
+//			PowerType pt = spec.getPowerType();
+			
 
-	private double weightedMajority(double currentPrice, double meanMarketPrice, double penaltyFactor)
-	{
-		double suggestedPrice = pricePointForBestProfit;
-		double totalWeight = 0.0;
-
-		// for consumption, the more negative the price, the better our profit
-		// we iterate through the list of experts and dock every expert whose price
-		// is larger than the current price - we are penalizing experts who want us to
-		// reduce the price 
-
-		// if our current profit is greater than the bestProfit
-		if(profit > bestProfit) {
-
-			for (int idx = 0; idx < numExperts; ++idx) {
-
-				// dock the experts whose price is greater (which means we will get less profit)
-				if(expertConsumptionPrices.get(idx)  < pricePointForBestProfit) {
-					expertConsumptionWeights.set(idx, expertConsumptionWeights.get(idx)*penaltyFactor);
-				}
-
-				// accumulate suggestedPrice
-				suggestedPrice +=  expertConsumptionWeights.get(idx) * expertConsumptionPrices.get(idx);
-
-				// accumulate the total weight
-				totalWeight += expertConsumptionWeights.get(idx);
+			// Method 1: Estimate profit from subscription and market manager data 
+			HashMap<CustomerInfo, CustomerRecord> customerMap = customerSubscriptions.get(spec);
+			
+			double totalUsage = 0.0;
+			int numSubscribers = 0;
+			
+			for (CustomerRecord cr : customerMap.values())
+			{
+				totalUsage += cr.getUsage(0);
+				numSubscribers += cr.subscribedPopulation;
 			}
+			
+			double totalRevenue = totalUsage*spec.getRates().get(0).getValue();
+			
+			currentProfit.put(spec, currentProfit.get(spec) + totalRevenue - estimatedEnergyCost*totalUsage);
+			
+			System.out.println("Number of subscribers: " + numSubscribers);
+			System.out.println("Total Usage: " + totalUsage + "\nRate" + spec.getRates().get(0).getValue());
+			System.out.println("TotalRevenue: " + totalRevenue + "\nEnergy Cost: " + estimatedEnergyCost*totalUsage + "\nCurrent profit: " + currentProfit.get(spec));
+			
 
-			// set the bestProfit to be the current profit
-			bestProfit = profit;
+			// Method 2: If we're only using one tariff, we can just use our cash position
+			// currentProfit.put(spec, currentProfit.get(spec) + profit);
 
-			// set the current price to be the best one so far
-			pricePointForBestProfit = currentPrice;
-
-			// scale the suggestd price
-			suggestedPrice /= totalWeight;
-
-			log.info("Updating suggested price to " + suggestedPrice + " best price so far: " + pricePointForBestProfit);
-
+			return;		
 		}
-		else if(profit < bestProfit) {
-
-			// dock the experts whose price is smaller (ones that are trying to get us larger profit)
-			// as they are actually not doing so
-			for (int idx = 0; idx < numExperts; ++idx) {
-
-				if(expertConsumptionPrices.get(idx) > pricePointForBestProfit) {
-					expertConsumptionWeights.set(idx, expertConsumptionWeights.get(idx)*penaltyFactor);
-				}
-
-				// accumulate suggestedPrice
-				suggestedPrice += expertConsumptionWeights.get(idx) * expertConsumptionPrices.get(idx);
-
-				// accumulate the total weight
-				totalWeight += expertConsumptionWeights.get(idx);
-			}
-
-			// scale the suggestd price
-			suggestedPrice /= totalWeight;
-
-			log.info("profit: " + profit + " < bestProfit: " + bestProfit + ". New suggested price: " + suggestedPrice);
-
-		}
-
-		return suggestedPrice;
 	}
 
-	
-	private void EXP3(TariffSpecification tariffSpec, int t) {
+	private void renormalizeWeights () {
+		double totalConsumptionWeight = 0.0;
+		for (double w : expertConsumptionWeights) {
+			System.out.println("Log Weight: " + w + " Weight: " + Math.exp(w));
+			totalConsumptionWeight += Math.exp(w);
+			System.out.println("Total so far: " + totalConsumptionWeight);
+		}
 		
-		double weightedcurrentProfit = -currentProfit.get(tariffSpec) / Math.exp(expertConsumptionWeights.get(currentExpert));
+		double totLogWeight = Math.log(totalConsumptionWeight);
+		for (int i = 0; i < numExperts; i++) {
+			System.out.println("TotalConsumptionWeight: " +  totalConsumptionWeight + " TotalLogWeight: " + totLogWeight);
+			System.out.println("Set Consumption Weight : " + i + " to: " +  (expertConsumptionWeights.get(i) - totLogWeight) );
+			expertConsumptionWeights.set(i, expertConsumptionWeights.get(i) - totLogWeight);
+		}
+		
+		double totalProductionWeight = 0.0;
+		for (double w : expertProductionWeights) {
+			totalProductionWeight += Math.exp(w);
+		}
+		
+		totLogWeight = Math.log(totalProductionWeight);
+		for (int i = 0; i < numExperts; i++)
+		{
+			expertProductionWeights.set(i, expertProductionWeights.get(i) - Math.log(totalProductionWeight));
+		}
+			
+	}
+
+	public Pair<Integer, Double> drawFromQDistribution (ArrayList<Double> logWeights, double gamma) {
+
+		ArrayList<Double> cdf = new ArrayList<Double> ();
+		
+		cdf.add(0.0);
+		for (double w : logWeights) {
+			System.out.println("Weight: " + w + " LogWeight: " + Math.exp(w));
+			System.out.println("CDF: " + (cdf.get(cdf.size()-1) + Math.exp(w)));
+			cdf.add(cdf.get(cdf.size()-1) + Math.exp(w));
+		}
+
+		int n = cdf.size()-1;
+		double sum_wts = cdf.get(n);
+		ArrayList<Double> smoothed_cdf = new ArrayList<Double> (n+1);
+
+		smoothed_cdf.add(0.0);
+		for (int i=1; i < n+1; i ++) {
+			System.out.println("Smoothed CDF: " + (cdf.get(i)*(1-gamma)/sum_wts + gamma/n));
+			smoothed_cdf.add(cdf.get(i)*(1-gamma)/sum_wts + gamma/n);
+		}
+
+		double r = Math.random();
+
+		for (int i=0; i < n; i ++) {
+			if (r >= smoothed_cdf.get(i) && r < smoothed_cdf.get(i+1))
+				return new Pair<Integer, Double>(i, smoothed_cdf.get(i+1) - smoothed_cdf.get(i));
+		}
+
+		return new Pair<Integer, Double>(n-1, smoothed_cdf.get(n) - smoothed_cdf.get(n-1));
+	}
+
+	public int drawFromDistribution (ArrayList<Double> logWeights) {
+
+		ArrayList<Double> cdf = new ArrayList<Double> ();
+		cdf.add(0.0);
+		for (double w : logWeights)
+			cdf.add(cdf.get(cdf.size()-1) + Math.exp(w));
+
+		double r = Math.random()*cdf.get(cdf.size()-1);
+
+		for (int i=0; i < cdf.size() - 1; i ++) {
+			if (r >= cdf.get(i) && r < cdf.get(i+1))
+				return i;
+		}
+		return logWeights.size() - 1;
+
+	}
+
+	private void exp3(TariffSpecification tariffSpec, int t) {
+
+		// double currentLoss = currentProfit.get(tariffSpec);
+		// double weightedCurrentLoss =  currentLoss / Math.exp(expertConsumptionWeights.get(currentExpert));
+
+		double currentGain = currentProfit.get(tariffSpec);
+		double weightedCurrentGain =  currentGain / currentQWeight;
+
 		
 		currentProfit.put(tariffSpec, 0.0);
 		
 		double epsilon = Math.sqrt(2*Math.log(numExperts)/(numExperts*t));
-		expertConsumptionWeights.set(currentExpert, expertConsumptionWeights.get(currentExpert) - epsilon*weightedcurrentProfit);
-		
-//		ArrayList<Double> loss = new ArrayList<Double> (Collections.nCopies(numExperts, 0.0));
-//		loss.set(currentExpert, currentProfit);
+		System.out.println("CurrentGain: " + currentGain + " weightedCurrentGain: " + weightedCurrentGain + " Epsilon: " + epsilon);
+		// TODO: not sure about this
+		expertConsumptionWeights.set(currentExpert, expertConsumptionWeights.get(currentExpert) + epsilon*weightedCurrentGain);
 	}
+
+	// private void calculateLoss() {
+	// 	for (TariffSpecification spec :
+	// 		tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker())) {
+
+	// 		// Update the number of times we've tried this expert			
+	// 		int n = expertConsumptionNumTrials.get(spec).get(currentExpert) + 1;
+	// 		expertConsumptionNumTrials.get(spec).set(currentExpert, n);
+
+	// 		double profitSoFar = expertConsumptionAvgProfits.get(spec).get(currentExpert);
+	// 		expertConsumptionAvgProfits.get(spec).set(currentExpert, profitSoFar + currentProfit(spec));
+			
+	// 		if ()
+
+	// 		return 0.0;
+	// 	}
+	// }
 
 
 	private void improveTariffs (int timeSlotIndex) {
 
 		double currentPrice = 0.0;
-		//double meanMarketPrice = 0.0;
+		// Convert meanMarketPrice to $/kWh
 		double marketPrice = meanMarketPrice / 1000.0;
-		double penaltyFactor = 0.9;
+		// double penaltyFactor = 0.9;
 
 		ArrayList<TariffSpecification> newSpecifications = new ArrayList<TariffSpecification> ();
 
 		System.out.println("****** SIZE: " + tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker()).size() );
+
 		int idx=0;
 		for (TariffSpecification spec :
 			tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker())) {
@@ -689,15 +710,27 @@ implements PortfolioManager, Initializable, Activatable
 			// best profit
 			if (pt.isConsumption()) {
 				System.out.println("*** NEXT SPEC ***" + idx++);
-				//double suggestedPrice = weightedMajority(spec.getRates().get(0).getValue(), marketPrice, penaltyFactor);
-				EXP3(spec, timeSlotIndex - firstTimeslot);
+
+				// double loss = calculateLoss();
+				exp3(spec, timeSlotIndex - firstTimeslot);
 				renormalizeWeights();
-				currentExpert = drawFromDistribution(expertConsumptionWeights);
+
+				// Updated EXP3 for gain rather than loss
+				double gamma = 0.5;
+				Pair<Integer, Double> sample = drawFromQDistribution(expertConsumptionWeights, gamma);
+				currentExpert = sample.getValue0();
+				currentQWeight = sample.getValue1();
+
 				double suggestedPrice = expertConsumptionPrices.get(currentExpert);
 				System.out.println("Current expert: " + currentExpert);
-				System.out.println("Suggested price: " + suggestedPrice);
+				System.out.println("Current expert Qweight: " + currentQWeight + " Current expert weight: " + expertConsumptionWeights.get(currentExpert));
+				// System.out.println("Suggested price: " + suggestedPrice);
+
+				for (int i = 0; i < numExperts; i ++) {
+					System.out.println("Expert " + i + ": " + expertConsumptionWeights.get(i));
+				}
 				
-				// here, update the tariff and push it out
+				// Update the tariff and push it out
 				TariffSpecification newSpec =
 						new TariffSpecification(brokerContext.getBroker(),
 								PowerType.CONSUMPTION)
