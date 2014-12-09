@@ -25,11 +25,5 @@ public interface PortfolioManager
    * Returns total net expected usage across all subscriptions for the given
    * index (normally a timeslot serial number).
    */
-  public double collectUsage (int index);
-  
-  public void setMeanMarketPrice (double mmp);
-  public double getMeanMarketPrice ();
-  
-  public void setEstimatedEnergyCost (double eec);
-  public double getEstimatedEnergyCost ();
+  public double collectUsage (int index); 
 }

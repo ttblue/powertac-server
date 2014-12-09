@@ -16,7 +16,6 @@
 package org.powertac.samplebroker;
 
 import org.apache.log4j.Logger;
-import org.apache.log4j.Level;
 import org.joda.time.Instant;
 import org.powertac.common.BankTransaction;
 import org.powertac.common.CashPosition;
@@ -58,7 +57,6 @@ implements Initializable
   @Override
   public void initialize (BrokerContext broker)
   {
-	log.setLevel(Level.INFO);
     master = broker;
 // --- no longer needed ---
 //    for (Class<?> clazz: Arrays.asList(BankTransaction.class,
@@ -91,7 +89,6 @@ implements Initializable
   {
     cash = cp.getBalance();
     log.info("Cash position: " + cash);
-    log.error("Cash position: " + cash);
   }
   
   /**
