@@ -303,6 +303,7 @@ implements PortfolioManager, Initializable, Activatable
 	{
 		profit = cp.getBalance() - cash; 
 		cash += profit;
+		// System.out.println("Cash Balance : " + cp.getBalance() + " Our Cash: " + cash);
 		log.info("Cash position: " + cash);
 		log.info("Profit: " + profit);
 	}
@@ -556,34 +557,35 @@ implements PortfolioManager, Initializable, Activatable
 	}
 	
 	private void waitToPublishTariffs() {
+		int numSubscribers = 0;
+
 		for (TariffSpecification spec :
 			tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker())) {
 			PowerType pt = spec.getPowerType();
 			
 			// Method 1: Estimate profit from subscription and market manager data 
-//			HashMap<CustomerInfo, CustomerRecord> customerMap = customerSubscriptions.get(spec);
+			HashMap<CustomerInfo, CustomerRecord> customerMap = customerSubscriptions.get(spec);
 //			
-//			double totalUsage = 0.0;
-//			int numSubscribers = 0;
-//			
-//			for (CustomerRecord cr : customerMap.values())
-//			{
-//				totalUsage += cr.getUsage(0);
-//				numSubscribers += cr.subscribedPopulation;
-//			}
+			// double totalUsage = 0.0;
+			for (CustomerRecord cr : customerMap.values())
+			{
+				// totalUsage += cr.getUsage(0);
+				numSubscribers += cr.subscribedPopulation;
+			}
 //			
 //			double totalRevenue = totalUsage*spec.getRates().get(0).getValue();
 //			
 //			currentProfit.put(spec, currentProfit.get(spec) + totalRevenue - estimatedEnergyCost*totalUsage);
 //			
-//			System.out.println("Number of subscribers: " + numSubscribers);
+			System.out.println("Number of subscribers: " + numSubscribers);
 //			System.out.println("Total Usage: " + totalUsage + "\nRate" + spec.getRates().get(0).getValue());
 //			System.out.println("Total Revenue: " + totalRevenue + "\nEnergy Cost: " + estimatedEnergyCost*totalUsage + "\nCurrent profit: " + currentProfit.get(spec));
 			
 
 			// Method 2: If we're only using one tariff, we can just use 
 			// difference in cash position as our reward
-			expertConsumptionReward.get(pt).set(currentExpert, expertConsumptionReward.get(pt).get(currentExpert) + profit);
+			double reward = profit / 10000.0;
+			expertConsumptionReward.get(pt).set(currentExpert, expertConsumptionReward.get(pt).get(currentExpert) + reward);
 
 			return;
 		}
@@ -602,7 +604,7 @@ implements PortfolioManager, Initializable, Activatable
 		// Setup for finding currentExpert
 		double maxUCB = Double.NEGATIVE_INFINITY;
 		int bestExpert = -1;
-		double alpha = 0.5; //// EXPLORATION RATE - IMPORTANT
+		double alpha = 10; // TODO: make alpha decay over time (more rapidly than ln(t) increases, because we do want the exploration to stop at some point)
 		ArrayList<Integer> maxIndices = new ArrayList<Integer>();
 
 		// Find the best expert
@@ -610,7 +612,7 @@ implements PortfolioManager, Initializable, Activatable
 			int n = expertConsumptionNumTrials.get(pt).get(i);
 			double mu 	= expertConsumptionMu.get(pt).get(i);
 			double ucb 	= mu + Math.sqrt(alpha*Math.log(timeStep)/(2*n));
-			System.out.println("UCB " + i + ": " + ucb);
+			// System.out.println("UCB " + i + ": " + ucb);
 			if (ucb > maxUCB) {
 				maxUCB = ucb;
 				bestExpert = i;
@@ -625,7 +627,7 @@ implements PortfolioManager, Initializable, Activatable
 		if (maxIndices.size() > 0) {
 			double rand = Math.random();
 			bestExpert = (int) (Math.random()*(maxIndices.size() - 1));
-			System.out.println("Rand: " + rand + " MaxIndices size: " + maxIndices.size());
+			// System.out.println("Rand: " + rand + " MaxIndices size: " + maxIndices.size());
 		}
 		currentExpert = bestExpert;
 	}
@@ -668,6 +670,7 @@ implements PortfolioManager, Initializable, Activatable
 				// Remove the previous tariff
 				tariffRepo.removeSpecification(spec.getId());
 				currentProfit.remove(spec);
+
 				
 				newSpecifications.add(newSpec);
 			}
@@ -678,6 +681,10 @@ implements PortfolioManager, Initializable, Activatable
 			brokerContext.sendMessage(spec);
 			currentProfit.put(pt, 0.0);
 		}
+
+		System.out.println("Num tariff specs: " + tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker()).size());
+		System.out.println("Num deletedTariffs: " + tariffRepo.findAllDeletedTariffs().size());
+
 	}
 
 	public void setMeanMarketPrice (double mmp) {
