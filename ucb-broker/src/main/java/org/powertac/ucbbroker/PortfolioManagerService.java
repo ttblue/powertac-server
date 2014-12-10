@@ -624,7 +624,7 @@ implements PortfolioManager, Initializable, Activatable
 		// If there are multiple best experts, pick one at random
 		if (maxIndices.size() > 0) {
 			double rand = Math.random();
-			bestExpert = (int) Math.random()*(maxIndices.size() - 1);
+			bestExpert = (int) (Math.random()*(maxIndices.size() - 1));
 			System.out.println("Rand: " + rand + " MaxIndices size: " + maxIndices.size());
 		}
 		currentExpert = bestExpert;
