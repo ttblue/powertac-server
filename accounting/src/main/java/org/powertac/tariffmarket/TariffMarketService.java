@@ -629,7 +629,7 @@ public class TariffMarketService
       revokeTariffsForDisabledBrokers();
       updateRevokedTariffs();
       publishTariffs();
-      //removeRevokedTariffs();
+      removeRevokedTariffs(); // this was commented out
       processPendingSubscriptions();
       firstPublication = true;
     }

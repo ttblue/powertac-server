@@ -45,6 +45,7 @@ public class TariffRepo implements DomainRepo
 
   private HashMap<Long, TariffSpecification> specs;
   private HashSet<Long> deletedTariffs;
+  private HashMap<Long, TariffSpecification> myDeletedTariffs;
   private HashMap<PowerType, Tariff> defaultTariffs;
   private HashMap<Long, Tariff> tariffs;
   private HashMap<Long, Rate> rates;
@@ -137,6 +138,17 @@ public class TariffRepo implements DomainRepo
   {
     return new ArrayList<TariffSpecification>(specs.values());
   }
+
+  // public synchronized List<TariffSpecification> findAllDeletedTariffsByBroker(Broker broker)
+  // {
+  //   List<TariffSpecification> result = new ArrayList<TariffSpecification>();
+  //   for (TariffSpecification spec : deletedTariffs) {
+  //     if (spec.getBroker() == broker) {
+  //       result.add(spec);
+  //     }
+  //   }
+  //   return result;
+  // }
   
   public synchronized void addTariff (Tariff tariff)
   {
@@ -164,6 +176,15 @@ public class TariffRepo implements DomainRepo
   public synchronized List<Tariff> findAllTariffs ()
   {
     return new ArrayList<Tariff>(tariffs.values());
+  }
+
+  public synchronized ArrayList<Long> findAllDeletedTariffs ()
+  {
+    ArrayList<Long> ids = new ArrayList<Long>();
+    for (Long id : deletedTariffs) {
+      ids.add(id);
+    }
+    return ids;
   }
 
   public synchronized List<Tariff> findTariffsByState (Tariff.State state)
