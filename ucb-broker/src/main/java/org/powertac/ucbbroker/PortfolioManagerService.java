@@ -120,14 +120,15 @@ implements PortfolioManager, Initializable, Activatable
 
 	// Expert variables
 	private int numExperts = 100;
-	private int bestExpert = 0;
 	private int currentExpert = 0;
 	private double currentQWeight = 1.0/numExperts;
 
 	// Consumption variables
 	private ArrayList<Double> expertConsumptionWeights;
 	private ArrayList<Double> expertConsumptionPrices;
-	private HashMap<TariffSpecification, ArrayList<Integer>> consumptionNumTrials;
+	private HashMap<PowerType, ArrayList<Integer>> expertConsumptionNumTrials;
+	private HashMap<PowerType, ArrayList<Double>> expertConsumptionReward;
+	private HashMap<PowerType, ArrayList<Double>> expertConsumptionMu;
 
 
 	// Production variables
@@ -137,8 +138,6 @@ implements PortfolioManager, Initializable, Activatable
 	// current cash balance and last profit
 	private double cash = 0.0;
 	private double profit = 0.0;
-	private double bestProfit = 1.0;
-	private double worstLoss = -1.0;
 	
 	// Probability of randomly exploring
 	private double gamma = 0.9;
@@ -148,8 +147,9 @@ implements PortfolioManager, Initializable, Activatable
 
 	// keep track of timeslot
 	private int firstTimeslot = 0;
+	private int timeStep = 0;
 	
-	private HashMap<TariffSpecification, Double> currentProfit;
+	private HashMap<PowerType, Double> currentProfit;
 	
 	public double meanMarketPrice = 0.0;
 	public double estimatedEnergyCost = 0.0;
@@ -168,8 +168,10 @@ implements PortfolioManager, Initializable, Activatable
 		expertProductionWeights 	= new ArrayList<Double>();
 		expertProductionPrices 		= new ArrayList<Double>();
 
-		currentProfit 				= new HashMap<TariffSpecification, Double>();
-		consumptionNumTrials 		= new HashMap<TariffSpecification, ArrayList<Integer>>();
+		currentProfit 				= new HashMap<PowerType, Double>();
+		expertConsumptionNumTrials	= new HashMap<PowerType, ArrayList<Integer>>();
+		expertConsumptionReward		= new HashMap<PowerType, ArrayList<Double>>();
+		expertConsumptionMu 		= new HashMap<PowerType, ArrayList<Double>>();
 	}
 
 	/**
@@ -436,6 +438,7 @@ implements PortfolioManager, Initializable, Activatable
 	@Override // from Activatable
 	public synchronized void activate (int timeslotIndex)
 	{
+		timeStep += 1;
 		if (firstTimeslot == 0) { 
 			firstTimeslot = timeslotIndex;
 		}
@@ -498,9 +501,8 @@ implements PortfolioManager, Initializable, Activatable
 
 		currentExpert = numExperts;
 		for (int i=0; i < numExperts; i ++) {
-			if (startPrice >= expertConsumptionPrices.get(i) && startPrice < expertConsumptionPrices.get(i+1)) {
+			if (initPrice >= expertConsumptionPrices.get(i) && initPrice < expertConsumptionPrices.get(i+1)) {
 				currentExpert = i;
-				bestExpert = i;
 				break;
 			}
 		}
@@ -508,7 +510,7 @@ implements PortfolioManager, Initializable, Activatable
 		for (PowerType pt : customerProfiles.keySet()) {
 			// we'll just do fixed-rate tariffs for now
 			double rateValue = 0.0;
-			if (pt.isConsumption()) {
+			if (pt.isConsumption() && !pt.isInterruptible()) {
 				rateValue = ((expertConsumptionPrices.get(currentExpert) + fixedPerKwh) * (1 + defaultMargin));
 			}
 			else {
@@ -527,18 +529,37 @@ implements PortfolioManager, Initializable, Activatable
 			spec.addRate(rate);
 			customerSubscriptions.put(spec, new HashMap<CustomerInfo, CustomerRecord>());
 			tariffRepo.addSpecification(spec);
-			currentProfit.put(spec, 0.0);
+			currentProfit.put(pt, 0.0);
 			brokerContext.sendMessage(spec);
 			break;
 		}
+
+		// Initialize UCB variables
+		for (TariffSpecification spec :
+			tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker())) {
+			PowerType pt = spec.getPowerType();
+			ArrayList<Integer> numTrials = new ArrayList<Integer>();
+			ArrayList<Double> reward = new ArrayList<Double>();
+			ArrayList<Double> mu = new ArrayList<Double>();
+
+			for (int i=0; i < numExperts; i++) {
+				numTrials.add(1);
+				reward.add(0.0);
+				mu.add(0.0);
+			}
+
+			expertConsumptionNumTrials.put(pt, numTrials);
+			expertConsumptionReward.put(pt, reward);
+			expertConsumptionMu.put(pt, mu);
+		}
+
 	}
 	
 	private void waitToPublishTariffs() {
 		for (TariffSpecification spec :
 			tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker())) {
-//			PowerType pt = spec.getPowerType();
+			PowerType pt = spec.getPowerType();
 			
-
 			// Method 1: Estimate profit from subscription and market manager data 
 //			HashMap<CustomerInfo, CustomerRecord> customerMap = customerSubscriptions.get(spec);
 //			
@@ -560,125 +581,56 @@ implements PortfolioManager, Initializable, Activatable
 //			System.out.println("Total Revenue: " + totalRevenue + "\nEnergy Cost: " + estimatedEnergyCost*totalUsage + "\nCurrent profit: " + currentProfit.get(spec));
 			
 
-			// Method 2: If we're only using one tariff, we can just use our cash position
-			currentProfit.put(spec, currentProfit.get(spec) + profit);
+			// Method 2: If we're only using one tariff, we can just use 
+			// difference in cash position as our reward
+			expertConsumptionReward.get(pt).set(currentExpert, expertConsumptionReward.get(pt).get(currentExpert) + profit);
 
-			return;		
+			return;
 		}
-	}
-
-	private void renormalizeWeights () {
-		double totalConsumptionWeight = 0.0;
-		for (double w : expertConsumptionWeights) {
-//			System.out.println("Log Weight: " + w + " Weight: " + Math.exp(w));
-			totalConsumptionWeight += Math.exp(w);
-//			System.out.println("Total so far: " + totalConsumptionWeight);
-		}
-		
-		double totLogWeight = Math.log(totalConsumptionWeight);
-		for (int i = 0; i < numExperts; i++) {
-//			System.out.println("TotalConsumptionWeight: " +  totalConsumptionWeight + " TotalLogWeight: " + totLogWeight);
-//			System.out.println("Set Consumption Weight : " + i + " to: " +  (expertConsumptionWeights.get(i) - totLogWeight) );
-			expertConsumptionWeights.set(i, expertConsumptionWeights.get(i) - totLogWeight);
-		}
-		
-		double totalProductionWeight = 0.0;
-		for (double w : expertProductionWeights) {
-			totalProductionWeight += Math.exp(w);
-		}
-		
-		totLogWeight = Math.log(totalProductionWeight);
-		for (int i = 0; i < numExperts; i++)
-		{
-			expertProductionWeights.set(i, expertProductionWeights.get(i) - totLogWeight);
-		}
-			
 	}
 	
-	public Pair<Integer, Double> drawFromQDistribution (ArrayList<Double> logWeights, double gamma) {
+	private void ucb(PowerType pt, int t) {
 
-		ArrayList<Double> pdf = new ArrayList<Double> ();
-		
-		double sum_wts = 0.0;
-		for (double w : logWeights) {
-			pdf.add(Math.exp(w));
-			sum_wts += Math.exp(w);
-		}
-		System.out.println("Sum weights: " + sum_wts);
+		// Update the number of trials counter
+		int count = expertConsumptionNumTrials.get(pt).get(currentExpert) + 1;
+		expertConsumptionNumTrials.get(pt).set(currentExpert, count);
 
-		int n = pdf.size();
-		
-		ArrayList<Double> cdf = new ArrayList<Double> ();
+		// Extract the reward and update mu
+		double reward = expertConsumptionReward.get(pt).get(currentExpert);
+		expertConsumptionMu.get(pt).set(currentExpert, reward / (double) count);
 
-		cdf.add(0.0);
-		for (int i=1; i < n+1; i ++) {
-			cdf.add(cdf.get(i-1) + (1-gamma)*(pdf.get(i-1)/sum_wts) + gamma*(1 / (double) n));
-		}
+		// Setup for finding currentExpert
+		double maxUCB = Double.NEGATIVE_INFINITY;
+		int bestExpert = -1;
+		double alpha = 0.5; //// EXPLORATION RATE - IMPORTANT
+		ArrayList<Integer> maxIndices = new ArrayList<Integer>();
 
-		double r = Math.random();
-
-		for (int i=0; i < n; i ++) {
-			if (r >= cdf.get(i) && r < cdf.get(i+1)) {
-				System.out.println("P weight: " + pdf.get(i)/sum_wts);
-				return new Pair<Integer, Double>(i, cdf.get(i+1) - cdf.get(i));
+		// Find the best expert
+		for (int i = 0; i < numExperts; i++) {
+			int n = expertConsumptionNumTrials.get(pt).get(i);
+			double mu 	= expertConsumptionMu.get(pt).get(i);
+			double ucb 	= mu + Math.sqrt(alpha*Math.log(timeStep)/(2*n));
+			System.out.println("UCB " + i + ": " + ucb);
+			if (ucb > maxUCB) {
+				maxUCB = ucb;
+				bestExpert = i;
+				maxIndices.clear();
+			}
+			else if (Math.abs(ucb - maxUCB) < 1e-6) {
+				maxIndices.add(i);
 			}
 		}
-		System.out.println("P weight: " + pdf.get(n-1)/sum_wts);
-		return new Pair<Integer, Double>(n-1, cdf.get(n) - cdf.get(n-1));
-	}
 
-	
-	public int drawFromDistribution (ArrayList<Double> logWeights) {
-
-		ArrayList<Double> cdf = new ArrayList<Double> ();
-		cdf.add(0.0);
-		for (double w : logWeights)
-			cdf.add(cdf.get(cdf.size()-1) + Math.exp(w));
-
-		double r = Math.random()*cdf.get(cdf.size()-1);
-
-		for (int i=0; i < cdf.size() - 1; i ++) {
-			if (r >= cdf.get(i) && r < cdf.get(i+1))
-				return i;
+		// If there are multiple best experts, pick one at random
+		if (maxIndices.size() > 0) {
+			double rand = Math.random();
+			bestExpert = (int) Math.random()*(maxIndices.size() - 1);
+			System.out.println("Rand: " + rand + " MaxIndices size: " + maxIndices.size());
 		}
-		return logWeights.size() - 1;
-
-	}
-
-	private void ucb(TariffSpecification tariffSpec, int t) {
-
-		double currentGain = currentProfit.get(tariffSpec);
-		System.out.println("Current profit:" + currentGain);
-		if (currentGain < worstLoss) {
-			worstLoss = currentGain;
-			currentGain = -1.0;
-		} 
-		else if (currentGain < 0) {
-			currentGain = -1.0 - (worstLoss - currentGain)/worstLoss;
-		}
-		else if (currentGain > bestProfit) {
-			bestProfit = currentGain;
-			bestExpert = currentExpert;
-			currentGain = 1.0;
-		}
-		else currentGain = 1.0 - (bestProfit - currentGain)/bestProfit;
-
-		double weightedCurrentGain =  currentGain / currentQWeight;
-		
-		currentProfit.put(tariffSpec, 0.0);
-		
-		double epsilon = Math.sqrt(2*Math.log(numExperts)/(numExperts*t));
-		System.out.println("Current Gain: " + currentGain + " weightedCurrentGain: " + weightedCurrentGain + " Epsilon: " + epsilon);
-		// TODO: not sure about this
-		expertConsumptionWeights.set(currentExpert, expertConsumptionWeights.get(currentExpert) + epsilon*weightedCurrentGain);
+		currentExpert = bestExpert;
 	}
 
 	private void improveTariffs (int timeSlotIndex) {
-
-		double currentPrice = 0.0;
-		// Convert meanMarketPrice to $/kWh
-		double marketPrice = meanMarketPrice / 1000.0;
-		// double penaltyFactor = 0.9;
 
 		ArrayList<TariffSpecification> newSpecifications = new ArrayList<TariffSpecification> ();
 
@@ -689,26 +641,18 @@ implements PortfolioManager, Initializable, Activatable
 			tariffRepo.findTariffSpecificationsByBroker(brokerContext.getBroker())) {
 			PowerType pt = spec.getPowerType();
 			// if the current tariff's power type is consumption, we need to 
-			// adjust the rates based on the previous time step's profit and the
-			// best profit
+			// adjust the rates 
 			if (pt.isConsumption()) {
-				//System.out.println("*** NEXT SPEC ***" + idx++);
+				// Run UCB algorithm, which updates currentExpert
+				ucb(pt, timeSlotIndex - firstTimeslot);
 
-				// double loss = calculateLoss();
-				ucb(spec, timeSlotIndex - firstTimeslot);
-				renormalizeWeights();
+				System.out.println("CurrentExpert: " + currentExpert + 
+					" Cumulative Reward: " + expertConsumptionReward.get(pt).get(currentExpert) + 
+					" Num trials: " + expertConsumptionNumTrials.get(pt).get(currentExpert));
 
-				System.out.println("**********************");
-				// Updated EXP3 for gain rather than loss
-				Pair<Integer, Double> sample = drawFromQDistribution(expertConsumptionWeights, gamma);
-				currentExpert = sample.getValue0();
-				currentQWeight = sample.getValue1();
-
+				// Use the price suggested by the currentExpert
 				double suggestedPrice = expertConsumptionPrices.get(currentExpert);
-				System.out.println("Current expert: " + currentExpert);
-				System.out.println("Qweight: " + currentQWeight);// + "\nCurrent expert weight: " + expertConsumptionWeights.get(currentExpert));
-				System.out.println("Gamma: " + gamma);
-				
+
 				// Update the tariff and push it out
 				TariffSpecification newSpec =
 						new TariffSpecification(brokerContext.getBroker(),
@@ -717,9 +661,11 @@ implements PortfolioManager, Initializable, Activatable
 				newSpec.addRate(new Rate().withValue(suggestedPrice));
 				newSpec.addSupersedes(spec.getId());
 
+				// Tell others to remove the previous tariff
 				TariffRevoke revoke = new TariffRevoke(brokerContext.getBroker(), spec);
 				brokerContext.sendMessage(revoke);
-				
+
+				// Remove the previous tariff
 				tariffRepo.removeSpecification(spec.getId());
 				currentProfit.remove(spec);
 				
@@ -727,9 +673,10 @@ implements PortfolioManager, Initializable, Activatable
 			}
 		}
 		for (TariffSpecification spec : newSpecifications) {
+			PowerType pt = spec.getPowerType();
 			tariffRepo.addSpecification(spec);
 			brokerContext.sendMessage(spec);
-			currentProfit.put(spec, 0.0);
+			currentProfit.put(pt, 0.0);
 		}
 	}
 
